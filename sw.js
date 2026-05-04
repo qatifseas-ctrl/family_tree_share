@@ -1,67 +1,24 @@
-const CACHE_NAME = 'family-tree-pwa-v1';
-const APP_SHELL = [
-  './',
-  './index.html',
-  './family.html',
-  './manifest.json',
-  './icons/icon-72x72.png',
-  './icons/icon-96x96.png',
-  './icons/icon-128x128.png',
-  './icons/icon-144x144.png',
-  './icons/icon-152x152.png',
-  './icons/icon-192x192.png',
-  './icons/icon-384x384.png',
-  './icons/icon-512x512.png',
-  './icons/icon-maskable-192x192.png',
-  './icons/icon-maskable-512x512.png'
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(APP_SHELL);
-    self.skipWaiting();
-  })());
+/* شجرة العائلة — Service Worker */
+const CACHE_NAME='family-tree-v1';
+const SHELL_CACHE='family-tree-shell-v1';
+const STATIC_ASSETS=['./manifest.json','./icons/icon-192x192.png','./icons/icon-512x512.png','./icons/apple-touch-icon.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(SHELL_CACHE).then(c=>c.addAll(STATIC_ASSETS)).then(()=>self.skipWaiting()).catch(()=>self.skipWaiting()));});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME&&k!==SHELL_CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET'||!e.request.url.startsWith('http'))return;
+  var u=new URL(e.request.url);
+  if(u.origin!==self.location.origin){e.respondWith(fetch(e.request).catch(()=>new Response('',{status:503})));return;}
+  var isPage=e.request.mode==='navigate'||e.request.url.endsWith('index.html')||e.request.url.endsWith('/');
+  e.respondWith(isPage?networkFirst(e.request):cacheFirst(e.request));
 });
-
-self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.map(key => key === CACHE_NAME ? null : caches.delete(key)));
-    await self.clients.claim();
-  })());
-});
-
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
-  const isSameOrigin = url.origin === self.location.origin;
-  if (!isSameOrigin) return;
-
-  if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const network = await fetch(req);
-        const cache = await caches.open(CACHE_NAME);
-        cache.put('./index.html', network.clone()).catch(() => {});
-        return network;
-      } catch (e) {
-        const cache = await caches.open(CACHE_NAME);
-        return (await cache.match(req)) || (await cache.match('./index.html'));
-      }
-    })());
-    return;
-  }
-
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
-    const fetchPromise = fetch(req).then(resp => {
-      if (resp && resp.ok) cache.put(req, resp.clone()).catch(() => {});
-      return resp;
-    }).catch(() => cached);
-    return cached || fetchPromise;
-  })());
-});
+async function networkFirst(req){
+  var cache=await caches.open(SHELL_CACHE);
+  try{var r=await fetch(req);if(r&&r.status===200)cache.put(req,r.clone());return r;}
+  catch{var c=await cache.match(req);return c||new Response(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>غير متصل</title><style>body{font-family:system-ui;text-align:center;padding:60px;color:#374151}h1{font-size:3rem}</style></head><body><h1>🌳</h1><h2>أنت غير متصل</h2><p>تحقق من اتصالك وأعد المحاولة</p></body></html>`,{headers:{'Content-Type':'text/html;charset=utf-8'}});}
+}
+async function cacheFirst(req){
+  var c=await caches.match(req);if(c)return c;
+  try{var r=await fetch(req);if(r&&r.status===200){var cache=await caches.open(SHELL_CACHE);cache.put(req,r.clone());}return r;}
+  catch{return new Response('',{status:503});}
+}
+self.addEventListener('message',e=>{if(e.data==='SKIP_WAITING')self.skipWaiting();});
