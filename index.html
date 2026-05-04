@@ -7640,6 +7640,25 @@ function saveData(){
   // ← الحفظ السحابي يدوي فقط (زر ☁️ مزامنة) — لا تشغيل تلقائي
   triggerFamilyUpload(); // ← الرفع الصامت (نسخة العائلة — لا إشعار)
   _fsaTriggerSave();     // ← كتابة مباشرة في الملف (File System Access API)
+  // ← إزالة index.html من كاش الـ SW حتى لا يُعيد تحميل البيانات المضمّنة القديمة
+  _swInvalidateHtmlCache();
+}
+// يُزيل index.html من كاش الـ SW — يُشغَّل عند كل حفظ
+// الـ SW سيعيد جلبه من الشبكة في المرة القادمة ويُخزّن النسخة الجديدة
+function _swInvalidateHtmlCache(){
+  try{
+    if(!('caches' in window))return;
+    caches.keys().then(function(names){
+      names.forEach(function(name){
+        caches.open(name).then(function(cache){
+          // احذف index.html فقط — الأيقونات والـ manifest تبقى
+          cache.delete(location.href).catch(function(){});
+          cache.delete('./index.html').catch(function(){});
+          cache.delete('index.html').catch(function(){});
+        });
+      });
+    });
+  }catch(e){}
 }
 function showSaveToast(){
   var t=document.getElementById('saveToast');
@@ -7857,57 +7876,77 @@ deletePerson=function(id){
   rem(id);_invalidateAll();saveData();renderAll();
 };
 
-// ── Async init (IndexedDB → embedded tag → localStorage → default) ──
+// ── Async init (IDB → localStorage → embedded tag → default) ──
+// ⚠️ الترتيب الصحيح: IDB أولاً (بيانات المستخدم المحفوظة)
+//    ثم localStorage، ثم الـ tag المضمّن كبيانات أولية فقط
 (async function(){
   await _idbOpen();
   loadMyPerson();
 
-  // 1. محاولة تحميل البيانات المضمّنة (أعلى أولوية — مرفق في الملف)
-  var embeddedLoaded=false;
-  try{
-    var tag=document.getElementById('__family_tree_data__');
-    if(tag&&tag.textContent){
-      var raw=tag.textContent.replace(/\s/g,'');
-      if(raw){
-        var bin=atob(raw);
-        var bytes=new Uint8Array(bin.length);
-        for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-        var d=JSON.parse(new TextDecoder().decode(bytes));
-        if(d.people&&d.people.length){
-          people=d.people;nextId=d.nextId||1;relPairs=d.relPairs||[];
-          if(d.myPersonId){myPersonId=parseInt(d.myPersonId);saveMyPerson();}
-          people.forEach(function(p){expanded[p.id]=false;});
-          migrateExternalSpouses();
-          saveData(); // يحفظ في IDB وlocalStorage معاً
-          embeddedLoaded=true;
-        }
-      }
-    }
-  }catch(e){console.warn('Embedded load failed',e);}
+  var dataLoaded=false;
 
-  if(!embeddedLoaded){
-    // 2. محاولة IDB
+  // 1. محاولة IDB — أعلى أولوية (آخر تغيير حفظه المستخدم)
+  try{
     var idbData=await _idbLoad();
     if(idbData&&idbData.people&&idbData.people.length){
       people=idbData.people;nextId=idbData.nextId||1;relPairs=idbData.relPairs||[];
       people.forEach(function(p){expanded[p.id]=false;});
       migrateExternalSpouses();
       _markDeviceInit();
-    } else {
-      // 3. محاولة localStorage (كـ fallback)
+      dataLoaded=true;
+      console.log('[Init] Loaded from IDB:',people.length,'persons');
+    }
+  }catch(e){console.warn('[Init] IDB load failed',e);}
+
+  // 2. محاولة localStorage — إذا فشل IDB
+  if(!dataLoaded){
+    try{
       var lsData=_lsLoad();
-      if(lsData){
+      if(lsData&&lsData.people&&lsData.people.length){
         people=lsData.people;nextId=lsData.nextId||1;relPairs=lsData.relPairs||[];
         people.forEach(function(p){expanded[p.id]=false;});
         migrateExternalSpouses();
         _markDeviceInit();
         // ترحيل البيانات من localStorage إلى IDB
         _idbSave({people:people,relPairs:relPairs,nextId:nextId}).catch(function(){});
-      } else {
-        // 4. لا يوجد بيانات — ابدأ من الصفر
-        initData();
+        dataLoaded=true;
+        console.log('[Init] Loaded from localStorage:',people.length,'persons');
       }
-    }
+    }catch(e){console.warn('[Init] localStorage load failed',e);}
+  }
+
+  // 3. البيانات المضمّنة في الـ HTML — فقط إذا لا يوجد شيء محفوظ
+  //    (البذرة الأولى — لا تُستخدم إذا المستخدم سبق وحفظ تغييرات)
+  if(!dataLoaded){
+    try{
+      var tag=document.getElementById('__family_tree_data__');
+      if(tag&&tag.textContent){
+        var raw=tag.textContent.replace(/\s/g,'');
+        if(raw){
+          var bin=atob(raw);
+          var bytes=new Uint8Array(bin.length);
+          for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+          var d=JSON.parse(new TextDecoder().decode(bytes));
+          if(d.people&&d.people.length){
+            people=d.people;nextId=d.nextId||1;relPairs=d.relPairs||[];
+            if(d.myPersonId){myPersonId=parseInt(d.myPersonId);saveMyPerson();}
+            people.forEach(function(p){expanded[p.id]=false;});
+            migrateExternalSpouses();
+            // حفظ في IDB وlocalStorage حتى تصبح هي المصدر في الزيارات التالية
+            _idbSave({people:people,relPairs:relPairs,nextId:nextId}).catch(function(){});
+            _lsSave({people:people,relPairs:relPairs,nextId:nextId});
+            dataLoaded=true;
+            console.log('[Init] Loaded from embedded tag:',people.length,'persons');
+          }
+        }
+      }
+    }catch(e){console.warn('[Init] Embedded tag load failed',e);}
+  }
+
+  // 4. لا يوجد بيانات على الإطلاق — ابدأ من الصفر
+  if(!dataLoaded){
+    initData();
+    console.log('[Init] Starting fresh — no data found');
   }
 
   migrateExternalSpouses();
