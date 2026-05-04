@@ -6250,6 +6250,7 @@ async function openFamilyUpdatesModal(){
   let gistId=FAMILY_UPLOAD_CONFIG.GIST_ID||localStorage.getItem(FAMILY_UPLOAD_GIST_KEY)||localStorage.getItem('ft_fupload_gid')||'';
   let pat=FAMILY_UPLOAD_CONFIG.GITHUB_PAT||localStorage.getItem('ft_fupload_pat')||'';
   let keyHex=FAMILY_UPLOAD_CONFIG.KEY_HEX||localStorage.getItem('ft_fupload_key')||CLOUD_CONFIG.KEY_HEX||localStorage.getItem('ft_cloud_key')||'';
+  // المالك يقرأ فقط — يستخدم توكن رفع العائلة أو التوكن الرئيسي كـ fallback
   let readPat=pat||CLOUD_CONFIG.GITHUB_PAT||'';
 
   if(!gistId&&readPat){
@@ -6257,7 +6258,8 @@ async function openFamilyUpdatesModal(){
   }
 
   if(!gistId||!readPat){
-    document.getElementById('modalContainer').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px"><h3>📡 تحديثات العائلة</h3><div style="padding:14px;background:var(--bg-secondary);border:1px solid var(--card-border);border-radius:8px;font-size:13px;color:var(--text2);text-align:center">لم يتم إعداد رفع نسخة العائلة بعد.<br>اضغط <strong>إعداد</strong> لتهيئته.</div><div class="modal-footer"><button class="btn" onclick="closeModal()">إغلاق</button><button class="btn primary" onclick="closeModal();openFamilyUploadSetup()">⚙️ إعداد</button></div></div></div>`;
+    // عرض نموذج الإعداد الأولي مباشرةً
+    _showFamilyUpdates401Modal('not_configured', '', readPat);
     return;
   }
 
@@ -6265,7 +6267,13 @@ async function openFamilyUpdatesModal(){
   try{
     let headers={'Authorization':'token '+readPat,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
     let res=await fetch('https://api.github.com/gists/'+gistId,{headers});
-    if(!res.ok)throw new Error('GitHub API: '+res.status);
+
+    // ── معالجة 401 / 403 بذكاء ──
+    if(res.status===401||res.status===403){
+      _showFamilyUpdates401Modal(res.status===403?'forbidden':'unauthorized', gistId, readPat);
+      return;
+    }
+    if(!res.ok) throw new Error('GitHub API: '+res.status);
     let j=await res.json();
 
     let familyFiles=Object.values(j.files||{}).filter(f=>f.filename&&/^ft_family_.*\.dat$/i.test(f.filename));
@@ -6287,9 +6295,7 @@ async function openFamilyUpdatesModal(){
           let summary=_familySummarizeUpdate(data);
           let devId=ff.filename.replace(/^ft_family_/i,'').replace(/\.dat$/i,'');
           updates.push({
-            devId,
-            data,
-            summary,
+            devId,data,summary,
             pCount:(data.people||[]).length,
             ts:data.uploadedAt||'',
             filename:ff.filename,
@@ -6317,13 +6323,8 @@ async function openFamilyUpdatesModal(){
       let ts=u.ts?new Date(u.ts).toLocaleString('ar-SA',{timeZone:'Asia/Riyadh',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
       let stats=u.summary.stats;
       let chips=[
-        `👨 ${stats.males}`,
-        `👩 ${stats.females}`,
-        `⚰️ ${stats.deceased}`,
-        `🖼 ${stats.photos}`,
-        `➕ ${u.newCnt}`,
-        `🔄 ${u.updatedCnt}`,
-        `⏭ ${u.unchangedCnt}`
+        `👨 ${stats.males}`,`👩 ${stats.females}`,`⚰️ ${stats.deceased}`,
+        `🖼 ${stats.photos}`,`➕ ${u.newCnt}`,`🔄 ${u.updatedCnt}`,`⏭ ${u.unchangedCnt}`
       ].map(t=>`<span class="kin-stat" style="display:inline-flex;align-items:center;gap:4px">${t}</span>`).join('');
       return `<div style="padding:10px 12px;border:1px solid var(--card-border);border-radius:10px;background:var(--card-bg);margin-bottom:10px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -6357,6 +6358,99 @@ async function openFamilyUpdatesModal(){
   }catch(e){
     document.getElementById('modalContainer').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px"><h3>📡 تحديثات العائلة</h3><div style="padding:14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#991b1b;line-height:1.8">❌ ${String(e.message||e)}</div><div class="modal-footer"><button class="btn" onclick="closeModal()">إغلاق</button><button class="btn primary" onclick="closeModal();openFamilyUploadSetup()">⚙️ إعداد</button></div></div></div>`;
   }
+}
+
+// ── مودال تشخيص 401 / 403 / not_configured ──
+function _showFamilyUpdates401Modal(reason, gistId, usedPat){
+  let maskedPat = usedPat ? usedPat.slice(0,8)+'••••••••'+usedPat.slice(-4) : '(فارغ)';
+  let title='', body='', hint='';
+
+  if(reason==='not_configured'){
+    title='⚙️ لم يتم الإعداد بعد';
+    body=`لم يتم إعداد رفع نسخة العائلة على هذا الجهاز.`;
+    hint=`يجب ضبط <strong>GitHub PAT</strong> و <strong>Gist ID</strong> لاستقبال تحديثات أفراد العائلة.`;
+  } else if(reason==='unauthorized'){
+    title='🔑 خطأ في المصادقة (401)';
+    body=`التوكن المستخدم: <code style="font-size:11px;background:var(--bg-secondary);padding:2px 6px;border-radius:4px">${maskedPat}</code>`;
+    hint=`<strong>الأسباب المحتملة:</strong><br>
+    • التوكن منتهي الصلاحية — يجب إنشاء توكن جديد<br>
+    • التوكن لا يملك صلاحية <code>gist</code> — يجب التأكد من تفعيلها<br>
+    • التوكن تم حذفه من GitHub`;
+  } else {
+    title='🚫 رفض الوصول (403)';
+    body=`التوكن المستخدم: <code style="font-size:11px;background:var(--bg-secondary);padding:2px 6px;border-radius:4px">${maskedPat}</code>`;
+    hint=`التوكن لا يملك صلاحية القراءة على هذا الـ Gist.<br>تأكد أن التوكن هو <strong>نفس التوكن</strong> الذي أنشأ الـ Gist.`;
+  }
+
+  let savedGistId = gistId||FAMILY_UPLOAD_CONFIG.GIST_ID||localStorage.getItem(FAMILY_UPLOAD_GIST_KEY)||'';
+
+  document.getElementById('modalContainer').innerHTML=`
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:500px">
+    <h3>📡 تحديثات العائلة</h3>
+
+    <div style="padding:12px 14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:600;color:#991b1b;margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:#7f1d1d;line-height:1.8">${body}</div>
+      <div style="font-size:12px;color:#991b1b;margin-top:8px;line-height:1.8">${hint}</div>
+    </div>
+
+    <div style="background:var(--bg-secondary);border:1px solid var(--card-border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">🔧 تصحيح سريع — أدخل التوكن الصحيح</div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">🐱 GitHub Personal Access Token (gist scope مطلوب)</label>
+        <div style="display:flex;gap:6px">
+          <input id="fu401_pat" type="password" placeholder="github_pat_xxxxxxxx..."
+            style="flex:1;font-family:monospace;font-size:11px;padding:7px 10px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
+          <button class="btn" onclick="var i=document.getElementById('fu401_pat');i.type=i.type==='password'?'text':'password'" style="font-size:11px">👁</button>
+        </div>
+        <a href="https://github.com/settings/tokens/new?scopes=gist&description=FamilyTree-Read" target="_blank"
+          style="font-size:11px;color:#3b82f6;display:inline-block;margin-top:4px">← إنشاء توكن جديد في GitHub (gist scope فقط)</a>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">🔗 Gist ID</label>
+        <input id="fu401_gid" type="text" value="${savedGistId}" placeholder="معرّف الـ Gist"
+          style="width:100%;font-family:monospace;font-size:11px;padding:7px 10px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);box-sizing:border-box">
+      </div>
+
+      <button class="btn primary" style="width:100%" onclick="_applyFamilyPATFix()">✓ حفظ وإعادة المحاولة</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--text2);line-height:1.8;padding:8px 12px;background:var(--bg-secondary);border-radius:8px">
+      💡 <strong>نصيحة:</strong> استخدم نفس التوكن الذي أنشأت به الـ Gist — أو أنشئ توكناً جديداً مع تفعيل <code>gist</code> فقط.
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">إغلاق</button>
+      <button class="btn" onclick="closeModal();openFamilyUploadSetup()">⚙️ إعداد كامل</button>
+    </div>
+  </div></div>`;
+}
+
+// يحفظ التوكن الجديد ويعيد المحاولة مباشرةً
+async function _applyFamilyPATFix(){
+  let newPat=(document.getElementById('fu401_pat').value||'').trim();
+  let newGid=(document.getElementById('fu401_gid').value||'').trim();
+  if(!newPat){alert('الرجاء إدخال GitHub PAT');return;}
+
+  // تحقق سريع من التوكن قبل الحفظ
+  let btn=event.target;
+  btn.disabled=true;btn.textContent='⏳ جارٍ التحقق...';
+  try{
+    let testRes=await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+newPat,'Accept':'application/vnd.github+json'}});
+    if(testRes.status===401){btn.disabled=false;btn.textContent='✓ حفظ وإعادة المحاولة';alert('❌ التوكن غير صالح أو منتهي الصلاحية.\nالرجاء إنشاء توكن جديد من GitHub.');return;}
+    if(testRes.status===403){btn.disabled=false;btn.textContent='✓ حفظ وإعادة المحاولة';alert('❌ التوكن محظور.\nالرجاء إنشاء توكن جديد من GitHub.');return;}
+  }catch(e){/* تجاهل أخطاء الشبكة */}
+
+  // حفظ في الذاكرة وlocalStorage
+  FAMILY_UPLOAD_CONFIG.GITHUB_PAT=newPat;
+  if(newGid){FAMILY_UPLOAD_CONFIG.GIST_ID=newGid;localStorage.setItem(FAMILY_UPLOAD_GIST_KEY,newGid);localStorage.setItem('ft_fupload_gid',newGid);}
+  try{localStorage.setItem('ft_fupload_pat',newPat);}catch(e){}
+
+  btn.textContent='✅ تم الحفظ — جارٍ إعادة المحاولة...';
+  setTimeout(()=>openFamilyUpdatesModal(),600);
 }
 
 function openFamilyUpdateDetails(idx){
