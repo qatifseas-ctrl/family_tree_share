@@ -1,7 +1,7 @@
 {
   "name": "شجرة العائلة",
   "short_name": "العائلة",
-  "description": "شجرة عائلية تفاعلية - تصفح وابحث في سجل العائلة",
+  "description": "شجرة عائلية تفاعلية",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +10,6 @@
   "theme_color": "#3b82f6",
   "lang": "ar",
   "dir": "rtl",
-  "categories": ["lifestyle", "utilities"],
   "icons": [
     {
       "src": "icons/icon-72x72.png",
@@ -72,7 +71,5 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ],
-  "screenshots": [],
-  "prefer_related_applications": false
+  ]
 }

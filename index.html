@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.json">
 
 <!-- JSZip — لتصدير نسخة العائلة كـ PWA ZIP كامل -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
 
 <!-- Apple Touch Icons -->
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -23,7 +23,7 @@
 
 <!-- Favicon fallback -->
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
-<link rel="icon" type="image/png" sizes="96x96"  href="icons/icon-96x96.png">
+<link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96x96.png">
 
 <!-- ═══ PWA: Service Worker Registration + Install Prompt ═══ -->
 <script>
@@ -923,7 +923,62 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
 #mob-action-sheet-overlay.open { opacity:1;pointer-events:auto; }
 </style>
 
-</head>
+<style>
+  #mss-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;}
+  #mss-overlay.open{display:block;}
+  #mss-sheet{
+    position:fixed;z-index:601;background:var(--card-bg);
+    display:flex;flex-direction:column;
+    box-shadow:0 -8px 40px rgba(0,0,0,.22);
+    transition:transform .28s cubic-bezier(.32,.72,0,1);
+  }
+  /* جوال: يصعد من الأسفل */
+  body.mobile-mode #mss-sheet{
+    bottom:0;left:0;right:0;border-radius:20px 20px 0 0;
+    max-height:82vh;transform:translateY(100%);
+  }
+  body.mobile-mode #mss-sheet.open{transform:translateY(0);}
+  /* ديسكتوب: نافذة وسط */
+  body:not(.mobile-mode) #mss-sheet{
+    top:50%;left:50%;transform:translate(-50%,-60%);
+    width:min(560px,96vw);border-radius:16px;
+    max-height:80vh;opacity:0;pointer-events:none;
+    transition:transform .22s cubic-bezier(.32,.72,0,1),opacity .2s;
+  }
+  body:not(.mobile-mode) #mss-sheet.open{
+    transform:translate(-50%,-50%);opacity:1;pointer-events:auto;
+  }
+  .mss-handle{width:40px;height:4px;border-radius:2px;background:var(--card-border);margin:12px auto 0;flex-shrink:0;}
+  body:not(.mobile-mode) .mss-handle{display:none;}
+  .mss-header{display:flex;align-items:center;gap:10px;padding:12px 16px 10px;flex-shrink:0;border-bottom:1px solid var(--card-border);}
+  .mss-title{font-size:14px;font-weight:600;color:var(--text);flex:1;}
+  .mss-count-badge{font-size:12px;color:var(--text2);background:var(--bg-secondary);border:1px solid var(--card-border);border-radius:10px;padding:2px 9px;}
+  .mss-close-btn{background:var(--bg-secondary);border:1px solid var(--card-border);color:var(--text2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .mss-groups{display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
+  .mss-groups::-webkit-scrollbar{display:none;}
+  .mss-group-tab{padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;border:1.5px solid var(--card-border);background:var(--bg-secondary);color:var(--text2);flex-shrink:0;transition:all .15s;}
+  .mss-group-tab.active{background:#1e40af;color:#fff;border-color:#1e40af;}
+  .mss-body{overflow-y:auto;flex:1;}
+  .mss-item{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:.5px solid var(--card-border);cursor:pointer;}
+  body.mobile-mode .mss-item{min-height:60px;padding:14px 18px;}
+  .mss-item:hover,.mss-item:active{background:var(--bg-secondary);}
+  .mss-item.active{background:linear-gradient(135deg,var(--clr-accent-bg),#eff6ff);box-shadow:inset 0 0 0 1px rgba(59,130,246,.12);}
+  .mss-item-name{font-size:14px;font-weight:500;color:var(--text);}
+  body.mobile-mode .mss-item-name{font-size:15px;}
+  .mss-item-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+  body.mobile-mode .mss-item-sub{font-size:12px;}
+  .mss-footer{padding:12px 16px;background:var(--card-bg);border-top:1px solid var(--card-border);flex-shrink:0;display:flex;gap:8px;}
+  .mss-footer button.mss-btn-primary{flex:1;padding:12px;background:#1e40af;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;}
+  .mss-footer button.mss-btn-secondary{padding:12px 16px;background:var(--bg-secondary);color:var(--text2);border:1px solid var(--card-border);border-radius:12px;font-size:13px;cursor:pointer;}
+  .mss-sort-btn{padding:5px 12px;border:1.5px solid var(--card-border);border-radius:20px;background:var(--card-bg);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;}
+  .mss-sort-btn:hover{background:var(--bg-secondary);color:var(--text);}
+  .mss-sort-btn.active{background:#1e40af;color:#fff;border-color:#1e40af;}
+  #mss-sort-bar::-webkit-scrollbar{display:none;}
+  #mss-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+  /* صوت نشط */
+  .voice-active{animation:voicePulse .7s ease-in-out infinite;}
+  @keyframes voicePulse{0%,100%{opacity:.6;}50%{opacity:1;transform:translateY(-50%) scale(1.2);}}
+  </style></head>
 <body>
 <div id="app">
   <h1>🌳 شجرة العائلة</h1>
@@ -959,7 +1014,7 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
     <button onclick="openCloudSetup()" style="padding:5px 14px;background:#fff;color:#1e40af;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⚙️ إعداد (المالك)</button>
     <button onclick="closeBannerForever()" style="padding:5px 10px;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:8px;font-size:11px;cursor:pointer;white-space:nowrap">✕ إغلاق</button>
   </div>
-  <div id="saveToast"  style="position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:7px 18px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .4s;z-index:999;pointer-events:none;">✔ تم الحفظ</div>
+  <div id="saveToast" style="position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:7px 18px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .4s;z-index:999;pointer-events:none;">✔ تم الحفظ</div>
   <div class="legend">
     <div class="legend-item"><div class="gender-dot male-dot"></div> ذكر</div>
     <div class="legend-item"><div class="gender-dot female-dot"></div> أنثى</div>
@@ -1010,15 +1065,9 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
   <div id="guidePanel" class="panel"></div>
 </div>
 <div id="modalContainer"></div>
-<!-- Action Sheet للجوال -->
-<div id="mob-action-sheet-overlay" onclick="closeMobSheet()"></div>
-<div id="mob-action-sheet">
-  <div class="sheet-handle"></div>
-  <div class="sheet-name" id="mob-sheet-name">—</div>
-  <div class="sheet-btns" id="mob-sheet-btns"></div>
-</div>
-
+<script id="__family_tree_data__" type="application/json">eyJwZW9wbGUiOlt7ImlkIjoxLCJuYW1lIjoi2KzYryDYp9mE2LnYp9im2YTYqSIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6Im1hbGUiLCJkb2IiOiIxOTMwLTAxLTAxIiwiZG9kIjoiMjAwMC0wMS0wMSIsImRlY2Vhc2VkIjp0cnVlLCJwYXJlbnRJZCI6bnVsbCwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6IiIsImV4dGVybmFsRmF0aGVyTmFtZSI6IiIsInNvcnRPcmRlciI6OTk5OSwiY2hpbGRyZW5GYW1pbHlOYW1lIjoiIiwic3BvdXNlcyI6W3sibmFtZSI6Itis2K/YqSDYp9mE2LnYp9im2YTYqSIsImdlbmRlciI6ImZlbWFsZSIsImRlY2Vhc2VkIjp0cnVlLCJkaXZvcmNlZCI6ZmFsc2UsImRvYiI6IjE5MzUtMDEtMDEiLCJkb2QiOiIyMDA1LTAxLTAxIiwicmVsYXRpdmVJZCI6bnVsbCwicGVyc29uSWQiOjd9XSwicGhvdG8iOm51bGwsIm5vdGVzIjoiIiwiaXNFeHRlcm5hbCI6ZmFsc2V9LHsiaWQiOjIsIm5hbWUiOiLYp9mE2KfYqNmGINin2YTYo9mD2KjYsSIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6Im1hbGUiLCJkb2IiOiIxOTU1LTAzLTE1IiwiZG9kIjoiIiwiZGVjZWFzZWQiOmZhbHNlLCJwYXJlbnRJZCI6MSwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6Itis2K/YqSDYp9mE2LnYp9im2YTYqSIsImV4dGVybmFsRmF0aGVyTmFtZSI6IiIsInNvcnRPcmRlciI6OTk5OSwiY2hpbGRyZW5GYW1pbHlOYW1lIjoiIiwic3BvdXNlcyI6W3sibmFtZSI6Itiy2YjYrNipINin2YTYp9io2YYiLCJnZW5kZXIiOiJmZW1hbGUiLCJkZWNlYXNlZCI6ZmFsc2UsImRpdm9yY2VkIjpmYWxzZSwiZG9iIjoiMTk2MC0wNi0yMCIsInJlbGF0aXZlSWQiOm51bGwsInBlcnNvbklkIjo4fV0sInBob3RvIjpudWxsLCJub3RlcyI6IiIsImlzRXh0ZXJuYWwiOmZhbHNlfSx7ImlkIjozLCJuYW1lIjoi2KfZhNio2YbYqiIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6ImZlbWFsZSIsImRvYiI6IjE5NTgtMDctMTAiLCJkb2QiOiIiLCJkZWNlYXNlZCI6ZmFsc2UsInBhcmVudElkIjoxLCJmYXRoZXJJZCI6bnVsbCwiZmF0aGVyTmFtZSI6IiIsIm1vdGhlcklkIjpudWxsLCJtb3RoZXJOYW1lIjoi2KzYr9ipINin2YTYudin2KbZhNipIiwiZXh0ZXJuYWxGYXRoZXJOYW1lIjoiIiwic29ydE9yZGVyIjo5OTk5LCJjaGlsZHJlbkZhbWlseU5hbWUiOiIiLCJzcG91c2VzIjpbeyJuYW1lIjoi2LLZiNisINin2YTYqNmG2KoiLCJnZW5kZXIiOiJtYWxlIiwiZGVjZWFzZWQiOmZhbHNlLCJkaXZvcmNlZCI6ZmFsc2UsImRvYiI6IjE5NTUtMTEtMDUiLCJyZWxhdGl2ZUlkIjpudWxsLCJwZXJzb25JZCI6OX1dLCJwaG90byI6bnVsbCwibm90ZXMiOiIiLCJpc0V4dGVybmFsIjpmYWxzZX0seyJpZCI6NCwibmFtZSI6Itit2YHZitivIDEiLCJ0aXRsZSI6IiIsImZhbWlseU5hbWUiOiIiLCJnZW5kZXIiOiJtYWxlIiwiZG9iIjoiMTk4MC0wMi0xNCIsImRvZCI6IiIsImRlY2Vhc2VkIjpmYWxzZSwicGFyZW50SWQiOjIsImZhdGhlcklkIjpudWxsLCJmYXRoZXJOYW1lIjoiIiwibW90aGVySWQiOm51bGwsIm1vdGhlck5hbWUiOiLYstmI2KzYqSDYp9mE2KfYqNmGIiwiZXh0ZXJuYWxGYXRoZXJOYW1lIjoiIiwic29ydE9yZGVyIjo5OTk5LCJjaGlsZHJlbkZhbWlseU5hbWUiOiIiLCJzcG91c2VzIjpbXSwicGhvdG8iOm51bGwsIm5vdGVzIjoiIiwiaXNFeHRlcm5hbCI6ZmFsc2V9LHsiaWQiOjUsIm5hbWUiOiLYrdmB2YrYr9ipIDEiLCJ0aXRsZSI6IiIsImZhbWlseU5hbWUiOiIiLCJnZW5kZXIiOiJmZW1hbGUiLCJkb2IiOiIxOTgzLTA5LTIyIiwiZG9kIjoiIiwiZGVjZWFzZWQiOmZhbHNlLCJwYXJlbnRJZCI6MiwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6Itiy2YjYrNipINin2YTYp9io2YYiLCJleHRlcm5hbEZhdGhlck5hbWUiOiIiLCJzb3J0T3JkZXIiOjk5OTksImNoaWxkcmVuRmFtaWx5TmFtZSI6IiIsInNwb3VzZXMiOlt7Im5hbWUiOiLYstmI2Kwg2YXYt9mE2YIiLCJnZW5kZXIiOiJtYWxlIiwiZGVjZWFzZWQiOmZhbHNlLCJkaXZvcmNlZCI6dHJ1ZSwiZG9iIjoiMTk4MC0wMS0wMSIsInJlbGF0aXZlSWQiOm51bGwsInBlcnNvbklkIjoxMH0seyJuYW1lIjoi2KfZhNiy2YjYrCDYp9mE2KvYp9mG2YoiLCJnZW5kZXIiOiJtYWxlIiwiZGVjZWFzZWQiOmZhbHNlLCJkaXZvcmNlZCI6ZmFsc2UsImRvYiI6IjE5NzgtMDUtMTAiLCJyZWxhdGl2ZUlkIjpudWxsLCJwZXJzb25JZCI6MTF9XSwicGhvdG8iOm51bGwsIm5vdGVzIjoiIiwiaXNFeHRlcm5hbCI6ZmFsc2V9LHsiaWQiOjYsIm5hbWUiOiLYrdmB2YrYryAyIiwidGl0bGUiOiIiLCJmYW1pbHlOYW1lIjoiIiwiZ2VuZGVyIjoibWFsZSIsImRvYiI6IjE5ODgtMTItMDEiLCJkb2QiOiIiLCJkZWNlYXNlZCI6ZmFsc2UsInBhcmVudElkIjozLCJmYXRoZXJJZCI6bnVsbCwiZmF0aGVyTmFtZSI6IiIsIm1vdGhlcklkIjpudWxsLCJtb3RoZXJOYW1lIjoi2LLZiNisINin2YTYqNmG2KoiLCJleHRlcm5hbEZhdGhlck5hbWUiOiIiLCJzb3J0T3JkZXIiOjk5OTksImNoaWxkcmVuRmFtaWx5TmFtZSI6IiIsInNwb3VzZXMiOltdLCJwaG90byI6bnVsbCwibm90ZXMiOiIiLCJpc0V4dGVybmFsIjpmYWxzZX0seyJpZCI6NywibmFtZSI6Itis2K/YqSDYp9mE2LnYp9im2YTYqSIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6ImZlbWFsZSIsImRvYiI6IjE5MzUtMDEtMDEiLCJkb2QiOiIyMDA1LTAxLTAxIiwiZGVjZWFzZWQiOnRydWUsInBhcmVudElkIjpudWxsLCJmYXRoZXJJZCI6bnVsbCwiZmF0aGVyTmFtZSI6IiIsIm1vdGhlcklkIjpudWxsLCJtb3RoZXJOYW1lIjoiIiwiZXh0ZXJuYWxGYXRoZXJOYW1lIjoiIiwic29ydE9yZGVyIjo5OTk5LCJjaGlsZHJlbkZhbWlseU5hbWUiOiIiLCJzcG91c2VzIjpbXSwicGhvdG8iOm51bGwsIm5vdGVzIjoiIiwiaXNFeHRlcm5hbCI6dHJ1ZX0seyJpZCI6OCwibmFtZSI6Itiy2YjYrNipINin2YTYp9io2YYiLCJ0aXRsZSI6IiIsImZhbWlseU5hbWUiOiIiLCJnZW5kZXIiOiJmZW1hbGUiLCJkb2IiOiIxOTYwLTA2LTIwIiwiZG9kIjoiIiwiZGVjZWFzZWQiOmZhbHNlLCJwYXJlbnRJZCI6bnVsbCwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6IiIsImV4dGVybmFsRmF0aGVyTmFtZSI6IiIsInNvcnRPcmRlciI6OTk5OSwiY2hpbGRyZW5GYW1pbHlOYW1lIjoiIiwic3BvdXNlcyI6W10sInBob3RvIjpudWxsLCJub3RlcyI6IiIsImlzRXh0ZXJuYWwiOnRydWV9LHsiaWQiOjksIm5hbWUiOiLYstmI2Kwg2KfZhNio2YbYqiIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6Im1hbGUiLCJkb2IiOiIxOTU1LTExLTA1IiwiZG9kIjoiIiwiZGVjZWFzZWQiOmZhbHNlLCJwYXJlbnRJZCI6bnVsbCwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6IiIsImV4dGVybmFsRmF0aGVyTmFtZSI6IiIsInNvcnRPcmRlciI6OTk5OSwiY2hpbGRyZW5GYW1pbHlOYW1lIjoiIiwic3BvdXNlcyI6W10sInBob3RvIjpudWxsLCJub3RlcyI6IiIsImlzRXh0ZXJuYWwiOnRydWV9LHsiaWQiOjEwLCJuYW1lIjoi2LLZiNisINmF2LfZhNmCIiwidGl0bGUiOiIiLCJmYW1pbHlOYW1lIjoiIiwiZ2VuZGVyIjoibWFsZSIsImRvYiI6IjE5ODAtMDEtMDEiLCJkb2QiOiIiLCJkZWNlYXNlZCI6ZmFsc2UsInBhcmVudElkIjpudWxsLCJmYXRoZXJJZCI6bnVsbCwiZmF0aGVyTmFtZSI6IiIsIm1vdGhlcklkIjpudWxsLCJtb3RoZXJOYW1lIjoiIiwiZXh0ZXJuYWxGYXRoZXJOYW1lIjoiIiwic29ydE9yZGVyIjo5OTk5LCJjaGlsZHJlbkZhbWlseU5hbWUiOiIiLCJzcG91c2VzIjpbXSwicGhvdG8iOm51bGwsIm5vdGVzIjoiIiwiaXNFeHRlcm5hbCI6dHJ1ZX0seyJpZCI6MTEsIm5hbWUiOiLYp9mE2LLZiNisINin2YTYq9in2YbZiiIsInRpdGxlIjoiIiwiZmFtaWx5TmFtZSI6IiIsImdlbmRlciI6Im1hbGUiLCJkb2IiOiIxOTc4LTA1LTEwIiwiZG9kIjoiIiwiZGVjZWFzZWQiOmZhbHNlLCJwYXJlbnRJZCI6bnVsbCwiZmF0aGVySWQiOm51bGwsImZhdGhlck5hbWUiOiIiLCJtb3RoZXJJZCI6bnVsbCwibW90aGVyTmFtZSI6IiIsImV4dGVybmFsRmF0aGVyTmFtZSI6IiIsInNvcnRPcmRlciI6OTk5OSwiY2hpbGRyZW5GYW1pbHlOYW1lIjoiIiwic3BvdXNlcyI6W10sInBob3RvIjpudWxsLCJub3RlcyI6IiIsImlzRXh0ZXJuYWwiOnRydWV9XSwicmVsUGFpcnMiOltbNCw1XV0sIm5leHRJZCI6MTIsIm15UGVyc29uSWQiOm51bGx9</script>
 <script>
+
 var _HTML_TEMPLATE=document.documentElement.outerHTML;
 
 /* ══════════════════════════════════════════════════════════
@@ -1198,17 +1247,9 @@ const FATIHA_IMG='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwg
 // ║  قم بتعبئة هذه الثلاثة قيم مرة واحدة ثم لا تشاركها مع أحد      ║
 // ╚══════════════════════════════════════════════════════════════════╝
 const CLOUD_CONFIG = {
-  // مفتاح التشفير AES-256 — 64 حرف hex (أنشئه مرة واحدة وابقِه ثابتاً للأبد)
-  // يمكن إنشاؤه بتشغيل: [...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('') في console
-  KEY_HEX: '',  // ← ضع مفتاحك هنا
-
-  // GitHub Personal Access Token (صلاحية gist فقط — github.com/settings/tokens)
-  GITHUB_PAT: '',  // ← ضع التوكن هنا مثلاً: 'github_pat_xxxxxx'
-
-  // معرّف Gist (يُملأ تلقائياً بعد أول مزامنة — لا تعدّله يدوياً)
-  GIST_ID: '',  // ← يُملأ تلقائياً
-
-  // اسم الملف المشفّر في Gist (لا تغيّره بعد أول مزامنة)
+  KEY_HEX: '',
+  GITHUB_PAT: '',
+  GIST_ID: '',
   GIST_FILE: 'ft_encrypted.dat',
 };
 // ملف الصور المنفصل في نفس الـ Gist
@@ -1229,19 +1270,16 @@ function _markDeviceInit(){
 // ║  يُملأ بواسطة المالك ويُضمَّن تلقائياً في نسخة العائلة           ║
 // ╚══════════════════════════════════════════════════════════════════╝
 const FAMILY_UPLOAD_CONFIG = {
-  // توكن GitHub خاص بالرفع من أجهزة العائلة (gist scope — يمكن أن يكون حساباً ثانياً)
-  GITHUB_PAT: '',  // ← ضع التوكن هنا بعد إعداده من لوحة إعداد نسخة العائلة
-  // معرّف Gist المخصص لاستقبال تحديثات العائلة (اختياري — يُنشأ تلقائياً إذا تُرك فارغاً)
-  GIST_ID: '',     // ← يُملأ تلقائياً أو اكتبه يدوياً
-  // مفتاح التشفير (اختياري — اتركه فارغاً لرفع بدون تشفير؛ أو ضع مفتاح الأوُنر لتشفير أقوى)
-  KEY_HEX: '',     // ← اختياري
+  GITHUB_PAT: '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',
+  GIST_ID: '96539914aebd6066c015643ed736f7b7',
+  KEY_HEX: '419a757403e11b0b96783b8c94f19f33e6c58ce515b6555bffc7c95746ecd317',
 };
 // اسم ملف العائلة يعتمد على DEVICE_ID — كل نسخة لها ملفها في Gist
 const FAMILY_UPLOAD_GIST_KEY  = 'ft_family_gist_id_v1';
 // علامة تُضمَّن في نسخة العائلة تلقائياً عند التصدير
-const IS_FAMILY_COPY = false;
+const IS_FAMILY_COPY = true;
 // معرّف الجهاز — يُنشأ عشوائياً لكل نسخة عائلة مصدَّرة (يبقى ثابتاً فيها)
-const FAMILY_DEVICE_ID = '';
+const FAMILY_DEVICE_ID = 'e49e34';
 
 // ══════════════════════════════════════════════════════════
 //  سجل الدمج والاسترجاع قبل الدمج
@@ -8554,6 +8592,7 @@ function _setVoiceActive(on){
   document.body.appendChild(sheet);
 })();
 document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMergeHistoryButtons,0);});
+
 </script>
 </body>
 </html>
