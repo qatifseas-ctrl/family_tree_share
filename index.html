@@ -1039,9 +1039,7 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
     <button id="searchClearBtn" style="display:none">✕</button>
     <div id="searchResultsPanel" style="display:none"></div>
     <button class="btn primary" onclick="openAddModal(null)">+ إضافة فرد</button>
-    <button class="btn" onclick="toggleAll(true)">فتح الكل</button>
-    <button class="btn" onclick="toggleAll(false)">غلق الكل</button>
-    <button class="btn" onclick="exportData()" title="حفظ كملف HTML مع الإعدادات السحابية — للمالك فقط">💾 حفظ نسخة</button>
+    <button class="btn" id="toggleAllBtn" onclick="toggleAllStates()" title="فتح/إغلاق الكل">⊕ فتح الكل</button>
     <button class="btn" id="fsaSaveBtn2" onclick="fsaPickFile()" title="ربط الملف للحفظ التلقائي على الجوال — Chrome/Edge" style="display:none">📁 ربط الملف</button>
     <button class="btn" id="exportFamilyBtn" onclick="exportFamilyCopy()" title="حفظ نسخة للمشاركة مع العائلة — تحتوي إعدادات الرفع الصامت تلقائياً" style="display:none">📤 نسخة للعائلة</button>
     <button class="btn" id="familyUploadSetupBtn" onclick="openFamilyUploadSetup()" title="إعداد الرفع الصامت لنسخة العائلة" style="display:none">⚙️ إعداد رفع العائلة</button>
@@ -1110,6 +1108,8 @@ function _applyMobileMode(){
     btn.innerHTML='📱 وضع الجوال';
     btn.title='وضع الجوال: شجرة أخف وأسرع';
   }
+  // تحديث سلوك الأزرار العائمة عند تبديل الوضع
+  if(window._updateFabMobileMode)window._updateFabMobileMode();
 }
 
 // تبديل فتح/إغلاق فرع في وضع الجوال (بدون إغلاق الإخوة)
@@ -2580,6 +2580,36 @@ function buildKinTree(path1,path2,lcaId,p1,p2){
     </div>
   </div>`;
 }
+function toggleAllStates(){
+  // تحديد ما إذا كانت جميع العناصر مفتوحة
+  const allExpanded=people.every(p=>expanded[p.id]===true);
+  const btn=document.getElementById('toggleAllBtn');
+  
+  if(allExpanded){
+    // إغلاق الكل
+    people.forEach(p=>expanded[p.id]=false);
+    btn.textContent='⊕ فتح الكل';
+    btn.setAttribute('aria-pressed','false');
+    btn.title='فتح جميع الأفراد';
+  } else {
+    // فتح الكل (مع احترام وضع الجوال)
+    if(document.body.classList.contains('mobile-mode')){
+      // وضع الجوال: افتح الجذور فقط (مستوى واحد)
+      let roots=getRoots();
+      people.forEach(p=>expanded[p.id]=false);
+      roots.forEach(r=>expanded[r.id]=true);
+    } else {
+      // وضع الويب: افتح الكل
+      people.forEach(p=>expanded[p.id]=true);
+    }
+    btn.textContent='⊖ غلق الكل';
+    btn.setAttribute('aria-pressed','true');
+    btn.title='إغلاق جميع الأفراد';
+  }
+  renderAll();
+}
+
+// ── للتوافق مع الكود القديم ──
 function toggleAll(open){
   if(open&&document.body.classList.contains('mobile-mode')){
     // وضع الجوال: افتح الجذور فقط (مستوى واحد)
@@ -2588,6 +2618,13 @@ function toggleAll(open){
     roots.forEach(r=>expanded[r.id]=true);
   } else {
     people.forEach(p=>expanded[p.id]=open);
+  }
+  // تحديث الزر
+  const btn=document.getElementById('toggleAllBtn');
+  if(btn){
+    const allExpanded=people.every(p=>expanded[p.id]===true);
+    btn.textContent=allExpanded?'⊖ غلق الكل':'⊕ فتح الكل';
+    btn.setAttribute('aria-pressed',allExpanded?'true':'false');
   }
   renderAll();
 }
@@ -2882,6 +2919,24 @@ document.addEventListener('keydown',function(e){
     let sheet=document.getElementById('mss-sheet');
     if(sheet&&sheet.classList.contains('open'))return;
     clearSearch(true);
+  }
+  
+  // ── اختصارات لوحة المفاتيح العامة ──
+  // تجاهل إذا كان المؤشر في حقل input أو textarea
+  if(e.target===document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA')){
+    // استثناء: اسمح بـ Ctrl+K و / في أي مكان
+    if(!((e.ctrlKey||e.metaKey)&&e.key==='k'||e.key==='/')){
+      return;
+    }
+  }
+  
+  // Ctrl/Cmd + K أو / : فتح البحث
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){
+    e.preventDefault();
+    openSearchPanel();
+  } else if(e.key==='/'){
+    e.preventDefault();
+    openSearchPanel();
   }
 });
 function _srpHighlight(items){
@@ -3225,7 +3280,7 @@ function handleImportFile(e){
           for(let ii=0;ii<ib.length;ii++)iu8[ii]=ib.charCodeAt(ii);
           d=JSON.parse(new TextDecoder().decode(iu8));
         } else {
-          throw new Error('لم يتم العثور على بيانات مضمّنة في الملف.\nتأكد أن الملف محفوظ بزر "💾 حفظ نسخة" أو تصدير JSON كامل.');
+          throw new Error('لم يتم العثور على بيانات مضمّنة في الملف.\nتأكد من استخدام تصدير JSON كامل.');
         }
       } else {
         d=JSON.parse(text);
@@ -5640,9 +5695,8 @@ function renderGuide(){
 
     {id:'s7',icon:'💾',title:'الحفظ والنسخ الاحتياطي',html:`
 <p><strong>تلقائي محلياً:</strong> كل تغيير يُحفظ في المتصفح فوراً (إشعار ✔).</p>
-<p><strong>💾 حفظ نسخة:</strong> يُنشئ ملف HTML يحتوي كل البيانات — افتحه في أي جهاز مباشرةً. يُضمَّن فيه إعدادات السحابة إن كانت مُفعَّلة.</p>
 <p><strong>📤 تصدير JSON:</strong> نسخة احتياطية خفيفة — خياران: بدون صور (موصى به) أو مع الصور.</p>
-<p><strong>📥 استيراد:</strong> يقبل HTML و JSON — خياران: استبدال كامل أو دمج آمن.</p>`},
+<p><strong>📥 استيراد:</strong> يقبل JSON — خياران: استبدال كامل أو دمج آمن.</p>`},
 
     {id:'s_cloud',icon:'☁️',title:'الحفظ السحابي والمزامنة بين الأجهزة',html:`
 <p><strong>الإعداد (مرة واحدة فقط):</strong> اضغط ⚙️ في القائمة ← أدخل مفتاح AES-256 وتوكن GitHub ← احفظ.</p>
@@ -5655,7 +5709,6 @@ function renderGuide(){
 <ol style="padding-right:18px;margin:0 0 10px;line-height:2">
   <li>على الجهاز الأول: اضغط <strong>☁️ مزامنة</strong> بعد كل تعديل</li>
   <li>على الجهاز الثاني: اضغط <strong>⬇️ استعادة</strong> للحصول على آخر نسخة</li>
-  <li>لنقل الإعدادات للجهاز الثاني: اضغط <strong>💾 حفظ نسخة</strong> على الجهاز الأول — الملف يحتوي الإعدادات مُضمَّنة</li>
 </ol>
 <h4 style="margin:10px 0 5px;font-size:13px">رفع الصور (delta):</h4>
 <p>عند الضغط على ☁️ مزامنة يُرفع فقط الصور <strong>الجديدة أو المعدَّلة</strong> — الصور القديمة لا تُرفع مجدداً. عند الاستعادة تُضاف الصور غير الموجودة محلياً تلقائياً.</p>`},
@@ -5671,6 +5724,35 @@ function renderGuide(){
 <p><strong>بحث مركّب:</strong> اكتب أكثر من كلمة — مثال: "أحمد سارة" يجد أحمد الذي أمه أو زوجته سارة.</p>
 <p><strong>الانتقال:</strong> اضغط على اسم في نتائج البحث للانتقال إليه في الشجرة مباشرةً مع تمييزه بالأصفر.</p>
 <p><strong>Esc:</strong> يُغلق نتائج البحث ويُبقي الشجرة مفتوحة عند آخر شخص انتقلت إليه — يعمل من أي مكان في الصفحة.</p>`},
+
+    {id:'s8b',icon:'⌨️',title:'اختصارات لوحة المفاتيح',html:`
+<table style="width:100%;border-collapse:collapse;font-size:13px">
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px;font-weight:500;text-align:right;width:40%">المفتاح</td>
+  <td style="padding:8px;text-align:right">الوظيفة</td>
+</tr>
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px"><code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px">Ctrl/Cmd + K</code></td>
+  <td style="padding:8px">🔍 فتح نافذة البحث</td>
+</tr>
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px"><code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px">/</code></td>
+  <td style="padding:8px">🔍 فتح نافذة البحث (بديل)</td>
+</tr>
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px"><code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px">Esc</code></td>
+  <td style="padding:8px">❌ إغلاق النوافذ المفتوحة</td>
+</tr>
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px"><code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px">Enter</code></td>
+  <td style="padding:8px">✅ تأكيد البحث / اختيار من النتائج</td>
+</tr>
+<tr style="border-bottom:1px solid var(--card-border)">
+  <td style="padding:8px"><code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px">↑ ↓</code></td>
+  <td style="padding:8px">🔄 التنقل بين نتائج البحث</td>
+</tr>
+</table>
+<p style="margin-top:10px;padding:10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e"><strong>⚠️ ملاحظة:</strong> هذه الاختصارات للتطبيق فقط، لا تتعارض مع اختصارات المتصفح.</p>`},
 
     {id:'s9',icon:'📋',title:'بيانات الشخص',html:`
 <p>اضغط على أي اسم في الشجرة أو قائمة الأفراد لعرض بطاقته.</p>
@@ -7443,7 +7525,7 @@ function openCloudSetup(){
     :`<div class="form-row"><label>🔗 معرّف Gist (اختياري — اتركه فارغاً للبحث التلقائي)</label><input id="cs_gist" type="text" style="font-family:monospace;font-size:11px" placeholder="يُملأ تلقائياً — أو الصق الـ ID يدوياً"></div>`}
     <div style="padding:10px 12px;background:#d1fae5;border:1px solid #10b981;border-radius:8px;font-size:12px;color:#065f46;margin-bottom:8px">
       <strong>✅ الإعدادات تُحفظ تلقائياً</strong> في هذا المتصفح على هذا الجهاز.<br>
-      لنقلها لجهاز آخر: بعد الإعداد اضغط <strong>💾 حفظ نسخة</strong> — ستُضمَّن الإعدادات في ملف HTML.
+      لنقلها لجهاز آخر: استخدم البحث السحابي (☁️) لمزامنة البيانات عبر الأجهزة.
     </div>
     <div style="padding:10px 12px;background:#ede9fe;border:1px solid #8b5cf6;border-radius:8px;font-size:12px;color:#5b21b6;margin-bottom:14px">
       <strong>📐 هيكلية الأمان:</strong><br>
@@ -8168,9 +8250,9 @@ function _fsaShowFallbackBar(){
   if(bar){
     bar.style.display='flex';
     var hint=document.getElementById('fsaHint');
-    if(hint)hint.textContent='متصفحك لا يدعم الحفظ التلقائي — اضغط "💾 حفظ نسخة" بعد كل تعديل';
+    if(hint)hint.textContent='متصفحك لا يدعم الحفظ التلقائي — استخدم تصدير JSON للنسخ الاحتياطية';
     var btn=document.getElementById('fsaSaveBtn');
-    if(btn){btn.innerHTML='💾 حفظ نسخة';btn.onclick=exportData;}
+    if(btn){btn.innerHTML='📤 تصدير JSON';btn.onclick=function(){exportJSON(false);};}
   }
 }
 async function fsaRequestPermission(){
@@ -8368,7 +8450,7 @@ window.addEventListener('beforeunload',function(e){
   if(_cloudEnabled&&_isCloudConfigured())return; // السحابة مفعّلة — البيانات محفوظة
   if(IS_FAMILY_COPY&&_isFamilyUploadConfigured())return; // نسخة عائلة مع رفع
   e.preventDefault();
-  e.returnValue='البيانات قد لا تُحفظ. اضغط "💾 حفظ نسخة" أولاً.';
+  e.returnValue='البيانات قد لا تُحفظ. استخدم المزامنة السحابية أو تصدير JSON.';
 });
 window.addEventListener('appinstalled',function(){
   let b=document.getElementById('installBanner');
@@ -8445,17 +8527,50 @@ function dismissInstallBanner(){
   `;
   document.body.appendChild(fab);
 
-  // أظهر الزر عند التمرير للأسفل في وضع الجوال
-  window.addEventListener('scroll',function(){
-    // الجوال: يظهر بعد 200px. الديسكتوب: يظهر دائماً عند التمرير (البحث مفيد)
-    fab.classList.toggle('visible',window.scrollY>200);
-  },{passive:true});
-  // إظهار فوري للبحث حتى قبل التمرير
-  setTimeout(()=>fab.classList.add('visible'),400);
+  let _autoHideTimer = null;
+  let _isMobileMode = document.body.classList.contains('mobile-mode');
 
-  // أظهر/أخفِ عند تبديل وضع الجوال
-  let origApply=window._applyMobileMode||function(){};
-  // سيُعاد التحقق عند كل scroll
+  function updateFabVisibility() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    
+    if (_isMobileMode) {
+      // وضع الجوال: إظهار عند التمرير أو الحركة، إخفاء تلقائي بعد 2 ثانية
+      if (window.scrollY > 200) {
+        fab.classList.add('visible');
+        // إعادة تعيين مؤقت الإخفاء التلقائي
+        clearTimeout(_autoHideTimer);
+        _autoHideTimer = setTimeout(() => {
+          fab.classList.remove('visible');
+        }, 2000);
+      }
+    } else {
+      // وضع الديسكتوب: ثابت دائماً
+      fab.classList.add('visible');
+      clearTimeout(_autoHideTimer);
+    }
+  }
+
+  // أظهر الزر عند التمرير والحركة (مع مراعاة وضع الجوال)
+  window.addEventListener('scroll', updateFabVisibility, { passive: true });
+  
+  // إظهار الزر عند أي تفاعل في الشجرة (حركة الماوس أو اللمس)
+  document.addEventListener('mousemove', () => {
+    if (_isMobileMode) {
+      fab.classList.add('visible');
+      clearTimeout(_autoHideTimer);
+      _autoHideTimer = setTimeout(() => {
+        fab.classList.remove('visible');
+      }, 2000);
+    }
+  }, { passive: true });
+
+  // إعادة تقييم عند تبديل وضع الجوال
+  window._updateFabMobileMode = () => {
+    updateFabVisibility();
+  };
+
+  // التحقق الأولي
+  updateFabVisibility();
 })();
 
 // ══════════════════════════════════════════════════════════
