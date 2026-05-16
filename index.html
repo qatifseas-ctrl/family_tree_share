@@ -1841,6 +1841,7 @@ function searchNavCurrent(){
 //  لوحة بحث الجوال المنفصلة
 // ══════════════════════════════════════════════════════════
 let _mssActiveGroup='all'; // المجموعة المختارة حالياً
+let _mssSavedActiveGroup='all'; // حفظ المجموعة المختارة عند الضغط على الشريط الأزرق
 let _mssGroupResults=[];   // نتائج المجموعة المختارة
 
 function openMobSearchSheet(results, q){
@@ -8683,6 +8684,11 @@ function openSearchPanel(){
     ? people.filter(p=>matchesFullName(p,lastQ)).sort((a,b)=>scoreMatch(b,lastQ)-scoreMatch(a,lastQ))
     : [];
   openMobSearchSheet(results, lastQ);
+  
+  // ── حفظ حالة المجموعة المختارة قبل إعادة تعيينها ──
+  // عند الضغط على الشريط الأزرق، احفظ المجموعة المختارة الحالية
+  _mssSavedActiveGroup = _mssActiveGroup;
+  
   // بعد الرسم: ضع البحث في حقل المدخلات وضع التركيز
   requestAnimationFrame(()=>{
     let inp = document.getElementById('mss-input');
@@ -8776,8 +8782,18 @@ function mssPanelSearch(q){
   });
   let groupKeys=Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length);
 
-  // إعادة تعيين المجموعة للكل عند كل بحث جديد
-  _mssActiveGroup = 'all';
+  // ── الحفاظ على المجموعة المختارة ──
+  // إذا كانت هناك مجموعة محفوظة (من الضغط على الشريط الأزرق)، استعدها
+  // وإلا، أعد تعيينها للكل
+  if(_mssSavedActiveGroup && _mssSavedActiveGroup !== 'all' && groups[_mssSavedActiveGroup]){
+    // المجموعة المحفوظة موجودة في النتائج الجديدة — احتفظ بها
+    _mssActiveGroup = _mssSavedActiveGroup;
+  } else {
+    // لا توجد مجموعة محفوظة أو المجموعة غير موجودة — استخدم الكل
+    _mssActiveGroup = 'all';
+    _mssSavedActiveGroup = 'all';
+  }
+  
   _mssCurrentResults = results;
   _mssOriginalResults = results.slice();
   _mssGroupResults = results.slice();
