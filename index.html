@@ -1828,6 +1828,10 @@ function searchNavCurrent(){
   let results=people
     .filter(p=>matchesFullName(p,q))
     .sort((a,b)=>scoreMatch(b,q)-scoreMatch(a,q));
+  
+  // ── حفظ المجموعة المختارة قبل فتح القائمة ──
+  _mssSavedActiveGroup = _mssActiveGroup;
+  
   openMobSearchSheet(results,q);
   // بعد الرسم: مرر للعنصر النشط ومييّزه
   requestAnimationFrame(()=>{
