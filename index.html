@@ -2914,29 +2914,101 @@ function searchKeyNav(e){
 // ── Esc عالمي: يلغي البحث حتى لو لم يكن المؤشر في حقل البحث ──
 // لكن إذا كانت لوحة MSS مفتوحة — يتعامل معها mssInputKey مباشرة
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'&&_lastSearchQ&&!document.getElementById('modalContainer').innerHTML){
-    // لا تمسح إذا كانت لوحة MSS مفتوحة (mssInputKey تتولى ذلك بـ stopPropagation)
-    let sheet=document.getElementById('mss-sheet');
-    if(sheet&&sheet.classList.contains('open'))return;
-    clearSearch(true);
-  }
-  
-  // ── اختصارات لوحة المفاتيح العامة ──
-  // تجاهل إذا كان المؤشر في حقل input أو textarea
-  if(e.target===document.activeElement&&(document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA')){
-    // استثناء: اسمح بـ Ctrl+K و / في أي مكان
-    if(!((e.ctrlKey||e.metaKey)&&e.key==='k'||e.key==='/')){
+  // ════════════════════════════════════════════════════════════════
+  // معالج Escape: إغلاق جميع النوافذ المفتوحة
+  // ════════════════════════════════════════════════════════════════
+  if(e.key==='Escape'){
+    let didClose=false;
+    
+    // 1. إغلاق نافذة البحث (مس-sheet)
+    let mssSheet=document.getElementById('mss-sheet');
+    if(mssSheet&&mssSheet.classList.contains('open')){
+      mssSheet.classList.remove('open');
+      let overlay=document.getElementById('mss-overlay');
+      if(overlay)overlay.style.display='none';
+      didClose=true;
+    }
+    
+    // 2. إغلاق نتائج البحث (Search Results Panel)
+    let srpPanel=document.getElementById('searchResultsPanel');
+    if(srpPanel&&srpPanel.style.display!=='none'){
+      srpPanel.style.display='none';
+      let srpOverlay=document.getElementById('searchResultsOverlay');
+      if(srpOverlay)srpOverlay.style.display='none';
+      didClose=true;
+    }
+    
+    // 3. إغلاق أي Modal مفتوح
+    let modalContainer=document.getElementById('modalContainer');
+    if(modalContainer&&modalContainer.innerHTML){
+      modalContainer.innerHTML='';
+      didClose=true;
+    }
+    
+    // 4. إغلاق أي Action Sheet مفتوح
+    let actionSheet=document.getElementById('mob-action-sheet');
+    if(actionSheet&&actionSheet.classList.contains('open')){
+      actionSheet.classList.remove('open');
+      let actionOverlay=document.getElementById('mob-action-sheet-overlay');
+      if(actionOverlay)actionOverlay.style.display='none';
+      didClose=true;
+    }
+    
+    // إذا أغلقنا شيء ما، منع الحدث من الانتشار
+    if(didClose){
+      e.preventDefault();
       return;
     }
   }
   
-  // Ctrl/Cmd + K أو / : فتح البحث
-  if((e.ctrlKey||e.metaKey)&&e.key==='k'){
+  // ════════════════════════════════════════════════════════════════
+  // معالج Ctrl+K (أو Cmd+K على Mac): فتح البحث
+  // يعمل مع اللغات المختلفة (إنجليزي/عربي/إلخ)
+  // ════════════════════════════════════════════════════════════════
+  // التحقق من Ctrl/Cmd + K (يعمل بغض النظر عن اللغة)
+  // e.code هو الموضع الفيزيائي للزر، بغض النظر عن اللغة
+  if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K'||e.code==='KeyK')){
     e.preventDefault();
     openSearchPanel();
-  } else if(e.key==='/'){
+    return;
+  }
+  
+  // ════════════════════════════════════════════════════════════════
+  // معالج / (الشرطة الأمامية): فتح البحث
+  // يعمل مع اللغات المختلفة
+  // ════════════════════════════════════════════════════════════════
+  // في لوحة المفاتيح الإنجليزية: /
+  // في لوحة المفاتيح العربية: على نفس الزر (Shift+Question)
+  
+  // تجاهل إذا كان المؤشر في حقل input أو textarea
+  // (ما عدا حالات خاصة مثل البحث)
+  let isInInput=e.target===document.activeElement&&
+                (document.activeElement.tagName==='INPUT'||
+                 document.activeElement.tagName==='TEXTAREA');
+  
+  // في حقول البحث، اسمح / للفتح
+  if(isInInput){
+    let isSearchInput=document.activeElement.id==='searchBox'||
+                      document.activeElement.id==='mss-input';
+    if(!isSearchInput){
+      return; // خرج من معالجة / في الحقول الأخرى
+    }
+  }
+  
+  // التحقق من / (في اللغة الإنجليزية)
+  if(e.key==='/'){
     e.preventDefault();
     openSearchPanel();
+    return;
+  }
+  
+  // التحقق من رمز العربية المعادل (في بعض لوحات المفاتيح)
+  // في لوحة المفاتيح العربية، الزر الذي يعطي / هو Shift+Question
+  if(e.shiftKey&&e.key==='?'){
+    // هذا يمثل / في بعض اللوحات
+    e.preventDefault();
+    openSearchPanel();
+    return;
   }
 });
 function _srpHighlight(items){
