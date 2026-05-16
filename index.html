@@ -1861,7 +1861,20 @@ function openMobSearchSheet(results, q){
 
   sheet._allResults=results;sheet._groups=groups;sheet._q=q;
   sheet._originalResults=results.slice(); // حفظ النسخة الأصلية
-  _mssActiveGroup='all';_mssGroupResults=results;
+  
+  // ── الحفاظ على المجموعة المختارة ──
+  // تحقق إذا كانت المجموعة المحفوظة موجودة في المجموعات الجديدة
+  if(_mssSavedActiveGroup && _mssSavedActiveGroup !== 'all' && groups[_mssSavedActiveGroup]){
+    // المجموعة موجودة — احتفظ بها
+    _mssActiveGroup = _mssSavedActiveGroup;
+    _mssGroupResults = groups[_mssSavedActiveGroup].slice();
+  } else {
+    // المجموعة غير موجودة أو لم تُختر — استخدم الكل
+    _mssActiveGroup = 'all';
+    _mssGroupResults = results;
+    _mssSavedActiveGroup = 'all';
+  }
+  
   _mssCurrentResults=results;
   _mssOriginalResults=results.slice();
 
@@ -1873,14 +1886,18 @@ function openMobSearchSheet(results, q){
     if(groupKeys.length>1){
       groupsEl.style.display='flex';
       groupsEl.innerHTML=
-        `<div class="mss-group-tab active" data-group="all" onclick="mssSelectGroup('all')">الكل (${results.length})</div>`+
-        groupKeys.map(k=>`<div class="mss-group-tab" data-group="${k}" onclick="mssSelectGroup('${k}')">${k} (${groups[k].length})</div>`).join('');
+        `<div class="mss-group-tab${_mssActiveGroup==='all'?' active':''}" data-group="all" onclick="mssSelectGroup('all')">الكل (${results.length})</div>`+
+        groupKeys.map(k=>`<div class="mss-group-tab${_mssActiveGroup===k?' active':''}" data-group="${k}" onclick="mssSelectGroup('${k}')">${k} (${groups[k].length})</div>`).join('');
     } else {
       groupsEl.style.display='none';groupsEl.innerHTML='';
     }
   }
 
-  _mssRenderItems(results,q);
+  // ── عرض النتائج بناءً على المجموعة المختارة ──
+  // إذا كانت مجموعة محددة مختارة، عرض نتائجها
+  let itemsToShow = _mssActiveGroup === 'all' ? results : _mssGroupResults;
+  _mssRenderItems(itemsToShow,q);
+  
   overlay.classList.add('open');
   requestAnimationFrame(()=>{
     sheet.classList.add('open');
@@ -1891,7 +1908,7 @@ function openMobSearchSheet(results, q){
     // تحديث أزرار الترتيب لتعكس الوضع الحالي
     document.querySelectorAll('.mss-sort-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.sort===_mssSortMode));
     // تطبيق الترتيب الحالي إذا كان هناك نتائج
-    if(results.length && _mssSortMode !== 'smart'){
+    if(itemsToShow.length && _mssSortMode !== 'smart'){
       _mssApplySort();
     }
   });
