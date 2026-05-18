@@ -1018,6 +1018,7 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
   <div class="legend">
     <div class="legend-item"><div class="gender-dot male-dot"></div> ذكر</div>
     <div class="legend-item"><div class="gender-dot female-dot"></div> أنثى</div>
+    <button id="statsToggleBtn" onclick="toggleStats()" title="إظهار/إخفاء الإحصائيات" style="padding:4px 8px;border:1px solid var(--card-border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;line-height:1;">📊</button>
     <div class="legend-item" style="background:#e8f5e9;padding:2px 6px;border-radius:4px;">هلال أخضر = متوفى</div>
     <div class="legend-item"><span class="status-dot dot-divorced">م</span> = مطلق/ة</div>
     <div class="legend-item"><span style="font-size:13px">🔗</span> متزوج/ة من شخص في الشجرة</div>
@@ -1027,13 +1028,7 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
   </div>
   <!-- My Person Banner -->
 
-  <!-- Stats -->
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-    <button id="statsToggleBtn" onclick="toggleStats()" title="إظهار/إخفاء الإحصائيات" style="padding:6px 10px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;display:flex;align-items:center;gap:6px;">
-      <span style="font-size:14px;">📊</span>
-      <span id="statsToggleBtnText">عرض الإحصائيات</span>
-    </button>
-  </div>
+  <!-- Stats Bar -->
   <div id="statsBar" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
 
   <div class="toolbar">
@@ -1856,18 +1851,15 @@ function toggleStats(){
   _statsVisible = !_statsVisible;
   let statsBar = document.getElementById('statsBar');
   let btn = document.getElementById('statsToggleBtn');
-  let btnText = document.getElementById('statsToggleBtnText');
   
   if(_statsVisible){
     statsBar.style.display = 'grid';
     btn.style.background = 'var(--primary-color)';
     btn.style.color = 'white';
-    btnText.textContent = 'إخفاء الإحصائيات';
   } else {
     statsBar.style.display = 'none';
     btn.style.background = 'var(--card-bg)';
     btn.style.color = 'var(--text)';
-    btnText.textContent = 'عرض الإحصائيات';
   }
 }
 
