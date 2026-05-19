@@ -537,7 +537,7 @@ h1{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px;text-alig
 .list-title .title-text{font-size:13px;font-weight:700;color:var(--text)}
 .list-search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .list-search-box{position:relative;flex:1;min-width:220px}
-.list-search-box input{width:100%;padding:10px 36px 10px 12px;border:1px solid var(--card-border);border-radius:10px;background:var(--bg-secondary);color:var(--text);font-size:14px;outline:none}
+.list-search-box input{width:100%;padding:10px 36px 10px 48px;border:1px solid var(--card-border);border-radius:10px;background:var(--bg-secondary);color:var(--text);font-size:14px;outline:none}
 .list-search-box input:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.12)}
 .list-search-clear{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;border-radius:50%;background:transparent;color:var(--text2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
 .list-search-clear:hover{background:var(--card-border);color:var(--text)}
@@ -3966,6 +3966,7 @@ function renderList(){
       <div class="list-search-box">
         <input id="listSearchBox" type="text" value="${searchVal.replace(/"/g,'&quot;')}" placeholder="ابحث بالاسم، اللقب، الأب، الأم، أو الملاحظات..." oninput="setListSearch(this.value,false)" />
         ${listSearchTerm?`<button class="list-search-clear" onclick="clearListSearch()" title="مسح البحث">✕</button>`:''}
+        <button id="listSearchMicBtn" onclick="startVoiceSearchForInput('listSearchBox')" title="بحث صوتي" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;opacity:.6;padding:5px 6px;line-height:1;border-radius:50%;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🎤</button>
       </div>
       <button class="btn" onclick="clearListSearch()" style="font-size:11px;padding:8px 12px;white-space:nowrap">مسح</button>
     </div>
@@ -9001,8 +9002,12 @@ function _mssApplySort(){
 // ══════════════════════════════════════════════════════════
 //  البحث الصوتي (Web Speech API)
 // ══════════════════════════════════════════════════════════
+//  البحث الصوتي المحسّن - يدعم حقول متعددة
+// ══════════════════════════════════════════════════════════
 let _voiceRecognition = null;
-function startVoiceSearch(){
+let _voiceInputId = 'mss-input'; // الحقل الحالي
+
+function startVoiceSearch(inputId = 'mss-input'){
   let SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecog){
     alert('متصفحك لا يدعم البحث الصوتي. استخدم Chrome أو Edge.');
@@ -9014,6 +9019,8 @@ function startVoiceSearch(){
     _setVoiceActive(false);
     return;
   }
+  
+  _voiceInputId = inputId;
   let r = new SpeechRecog();
   r.lang = 'ar-SA';
   r.continuous = false;
@@ -9028,19 +9035,33 @@ function startVoiceSearch(){
       .join('');
     // إزالة أي علامات ترقيم في نهاية النص (نقطة، فاصلة، إلخ)
     transcript = transcript.replace(/[\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u060C\u061B\u061F\u06D4\u002E\u066A-\u066D]+$/u, '').trim();
-    // أحدّث حقل البحث مباشرة
-    let inp = document.getElementById('mss-input');
-    if(inp){ inp.value = transcript; mssPanelSearch(transcript); }
+    
+    // أحدّث حقل البحث المناسب
+    let inp = document.getElementById(_voiceInputId);
+    if(inp){ 
+      inp.value = transcript;
+      // استدعاء دالة البحث المناسبة حسب نوع الحقل
+      if(_voiceInputId === 'mss-input') {
+        mssPanelSearch(transcript);
+      } else if(_voiceInputId === 'listSearchBox') {
+        setListSearch(transcript, false);
+      }
+    }
   };
   r.onend = ()=>{ _voiceRecognition=null; _setVoiceActive(false); };
   r.onerror = e=>{ _voiceRecognition=null; _setVoiceActive(false); };
 
-  // ── استدعاء start() مباشرةً داخل user gesture (بدون setTimeout ولا getUserMedia) ──
-  // SpeechRecognition تطلب إذن الميكروفون بنفسها عند الحاجة
-  if(!document.getElementById('mss-sheet').classList.contains('open')) openSearchPanel();
+  // ── استدعاء start() مباشرةً داخل user gesture ──
+  if(inputId === 'mss-input' && !document.getElementById('mss-sheet').classList.contains('open')) 
+    openSearchPanel();
   try { r.start(); } catch(err){ _voiceRecognition=null; _setVoiceActive(false); }
 }
-function mssVoiceSearch(){ startVoiceSearch(); }
+
+function startVoiceSearchForInput(inputId){
+  startVoiceSearch(inputId);
+}
+
+function mssVoiceSearch(){ startVoiceSearch('mss-input'); }
 function _setVoiceActive(on){
   let btns = document.querySelectorAll('#mss-mic-btn, [onclick*="startVoiceSearch"]');
   btns.forEach(b=>b.classList.toggle('voice-active', on));
