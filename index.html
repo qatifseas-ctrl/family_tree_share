@@ -9193,6 +9193,9 @@ function _setVoiceActiveKin(on, personNum){
   if(on){
     let t = document.getElementById('saveToast');
     if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  } else {
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.opacity='0'; setTimeout(()=>{ t.style.background='#22c55e'; t.textContent='✔ تم الحفظ'; },400); }
   }
 }
 
@@ -9202,6 +9205,9 @@ function _setVoiceActiveMy(on){
   if(on){
     let t = document.getElementById('saveToast');
     if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  } else {
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.opacity='0'; setTimeout(()=>{ t.style.background='#22c55e'; t.textContent='✔ تم الحفظ'; },400); }
   }
 }
 
@@ -9211,6 +9217,9 @@ function _setVoiceActiveList(on){
   if(on){
     let t = document.getElementById('saveToast');
     if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  } else {
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.opacity='0'; setTimeout(()=>{ t.style.background='#22c55e'; t.textContent='✔ تم الحفظ'; },400); }
   }
 }
 
