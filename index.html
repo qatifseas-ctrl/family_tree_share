@@ -537,7 +537,7 @@ h1{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px;text-alig
 .list-title .title-text{font-size:13px;font-weight:700;color:var(--text)}
 .list-search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .list-search-box{position:relative;flex:1;min-width:220px}
-.list-search-box input{width:100%;padding:10px 36px 10px 48px;border:1px solid var(--card-border);border-radius:10px;background:var(--bg-secondary);color:var(--text);font-size:14px;outline:none}
+.list-search-box input{width:100%;padding:10px 36px 10px 12px;border:1px solid var(--card-border);border-radius:10px;background:var(--bg-secondary);color:var(--text);font-size:14px;outline:none}
 .list-search-box input:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.12)}
 .list-search-clear{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;border-radius:50%;background:transparent;color:var(--text2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
 .list-search-clear:hover{background:var(--card-border);color:var(--text)}
@@ -571,7 +571,7 @@ h1{font-size:20px;font-weight:600;color:var(--text);margin-bottom:16px;text-alig
 .file-input-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
 .kin-container{padding:4px 0;}
 .kin-search-box{position:relative;margin-bottom:8px;}
-.kin-search-box input{width:100%;padding:9px 12px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);font-size:13px;}
+.kin-search-box input{width:100%;padding:9px 12px;padding-right:40px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);font-size:13px;}
 .kin-results{position:absolute;top:100%;right:0;left:0;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;z-index:50;max-height:180px;overflow-y:auto;margin-top:2px;box-shadow:0 4px 16px rgba(0,0,0,.12);}
 .kin-result-item{padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text);border-bottom:0.5px solid var(--card-border);}
 .kin-result-item:last-child{border:none;}
@@ -978,6 +978,18 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
   /* صوت نشط */
   .voice-active{animation:voicePulse .7s ease-in-out infinite;}
   @keyframes voicePulse{0%,100%{opacity:.6;}50%{opacity:1;transform:translateY(-50%) scale(1.2);}}
+  /* Styling for voice buttons in various search fields */
+  .kin-voice-btn, .my-voice-btn, .list-voice-btn {
+    transition: opacity 0.2s ease, color 0.2s ease !important;
+    color: var(--text2, #6b7280) !important;
+  }
+  .kin-voice-btn:hover, .my-voice-btn:hover, .list-voice-btn:hover {
+    color: var(--text, #1f2937) !important;
+  }
+  .kin-voice-btn.voice-active, .my-voice-btn.voice-active, .list-voice-btn.voice-active {
+    animation: voicePulse 0.7s ease-in-out infinite;
+    color: #7c3aed !important;
+  }
   </style></head>
 <body>
 <div id="app">
@@ -2055,6 +2067,7 @@ function renderKinPanel(){
         </div>
         <div class="kin-search-box" id="kin1box" style="display:${p1?'none':'block'}">
           <input type="text" placeholder="ابحث أو اضغط لعرض الكل..." oninput="kinSearch(this.value,1)" onfocus="kinSearch(this.value,1)" id="kin1input">
+          <button type="button" id="kin1voice" class="kin-voice-btn" onclick="startKinVoiceSearch(1)" title="بحث صوتي للشخص الأول" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;opacity:0.55;padding:6px;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🎤</button>
           <div class="kin-results" id="kin1results" style="display:none"></div>
         </div>
       </div>
@@ -2070,6 +2083,7 @@ function renderKinPanel(){
         </div>
         <div class="kin-search-box" id="kin2box" style="display:${p2?'none':'block'}">
           <input type="text" placeholder="ابحث أو اضغط لعرض الكل..." oninput="kinSearch(this.value,2)" onfocus="kinSearch(this.value,2)" id="kin2input">
+          <button type="button" id="kin2voice" class="kin-voice-btn" onclick="startKinVoiceSearch(2)" title="بحث صوتي للشخص الثاني" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;opacity:0.55;padding:6px;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🎤</button>
           <div class="kin-results" id="kin2results" style="display:none"></div>
         </div>
       </div>
@@ -3965,8 +3979,8 @@ function renderList(){
     <div class="list-search-row">
       <div class="list-search-box">
         <input id="listSearchBox" type="text" value="${searchVal.replace(/"/g,'&quot;')}" placeholder="ابحث بالاسم، اللقب، الأب، الأم، أو الملاحظات..." oninput="setListSearch(this.value,false)" />
+        <button type="button" id="listVoice" class="list-voice-btn" onclick="startListVoiceSearch()" title="بحث صوتي" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:14px;cursor:pointer;opacity:0.55;padding:4px 6px;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🎤</button>
         ${listSearchTerm?`<button class="list-search-clear" onclick="clearListSearch()" title="مسح البحث">✕</button>`:''}
-        <button id="listSearchMicBtn" onclick="startVoiceSearchForInput('listSearchBox')" title="بحث صوتي" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;opacity:.6;padding:5px 6px;line-height:1;border-radius:50%;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">🎤</button>
       </div>
       <button class="btn" onclick="clearListSearch()" style="font-size:11px;padding:8px 12px;white-space:nowrap">مسح</button>
     </div>
@@ -5522,7 +5536,8 @@ function openMyPersonPicker(){
     <h3>أنا في الشجرة</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:10px">اختر اسمك لعرض صلة قرابتك مع كل شخص في الشجرة</p>
     <div style="position:relative;margin-bottom:8px">
-      <input type="text" id="mySearchInput" placeholder="ابحث بالاسم..." oninput="filterMyPicker(this.value)" style="width:100%;padding:8px 12px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);font-size:13px">
+      <input type="text" id="mySearchInput" placeholder="ابحث بالاسم..." oninput="filterMyPicker(this.value)" style="width:100%;padding:8px 12px;padding-left:45px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text);font-size:13px">
+      <button type="button" id="myPersonVoice" class="my-voice-btn" onclick="startMyPersonVoiceSearch()" title="بحث صوتي" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:14px;cursor:pointer;opacity:0.55;padding:4px 6px;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.55'">🎤</button>
     </div>
     <div id="myPickerList" style="max-height:280px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px">${opts}</div>
     ${myPersonId?`<div style="margin-top:10px;text-align:center"><button class="btn" onclick="setMyPerson(null)" style="color:#ef4444">✕ إلغاء تحديد الاسم</button></div>`:''}
@@ -9002,12 +9017,8 @@ function _mssApplySort(){
 // ══════════════════════════════════════════════════════════
 //  البحث الصوتي (Web Speech API)
 // ══════════════════════════════════════════════════════════
-//  البحث الصوتي المحسّن - يدعم حقول متعددة
-// ══════════════════════════════════════════════════════════
 let _voiceRecognition = null;
-let _voiceInputId = 'mss-input'; // الحقل الحالي
-
-function startVoiceSearch(inputId = 'mss-input'){
+function startVoiceSearch(){
   let SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecog){
     alert('متصفحك لا يدعم البحث الصوتي. استخدم Chrome أو Edge.');
@@ -9019,8 +9030,6 @@ function startVoiceSearch(inputId = 'mss-input'){
     _setVoiceActive(false);
     return;
   }
-  
-  _voiceInputId = inputId;
   let r = new SpeechRecog();
   r.lang = 'ar-SA';
   r.continuous = false;
@@ -9035,33 +9044,176 @@ function startVoiceSearch(inputId = 'mss-input'){
       .join('');
     // إزالة أي علامات ترقيم في نهاية النص (نقطة، فاصلة، إلخ)
     transcript = transcript.replace(/[\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u060C\u061B\u061F\u06D4\u002E\u066A-\u066D]+$/u, '').trim();
-    
-    // أحدّث حقل البحث المناسب
-    let inp = document.getElementById(_voiceInputId);
-    if(inp){ 
-      inp.value = transcript;
-      // استدعاء دالة البحث المناسبة حسب نوع الحقل
-      if(_voiceInputId === 'mss-input') {
-        mssPanelSearch(transcript);
-      } else if(_voiceInputId === 'listSearchBox') {
-        setListSearch(transcript, false);
-      }
-    }
+    // أحدّث حقل البحث مباشرة
+    let inp = document.getElementById('mss-input');
+    if(inp){ inp.value = transcript; mssPanelSearch(transcript); }
   };
   r.onend = ()=>{ _voiceRecognition=null; _setVoiceActive(false); };
   r.onerror = e=>{ _voiceRecognition=null; _setVoiceActive(false); };
 
-  // ── استدعاء start() مباشرةً داخل user gesture ──
-  if(inputId === 'mss-input' && !document.getElementById('mss-sheet').classList.contains('open')) 
-    openSearchPanel();
+  // ── استدعاء start() مباشرةً داخل user gesture (بدون setTimeout ولا getUserMedia) ──
+  // SpeechRecognition تطلب إذن الميكروفون بنفسها عند الحاجة
+  if(!document.getElementById('mss-sheet').classList.contains('open')) openSearchPanel();
   try { r.start(); } catch(err){ _voiceRecognition=null; _setVoiceActive(false); }
 }
+function mssVoiceSearch(){ startVoiceSearch(); }
 
-function startVoiceSearchForInput(inputId){
-  startVoiceSearch(inputId);
+// ──── دوال البحث الصوتي للحقول الإضافية ────
+
+/**
+ * البحث الصوتي لحقل كاشف القرابة (الشخص 1 أو 2)
+ * @param {number} personNum - 1 أو 2
+ */
+function startKinVoiceSearch(personNum){
+  let SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecog){
+    alert('متصفحك لا يدعم البحث الصوتي. استخدم Chrome أو Edge.');
+    return;
+  }
+  
+  let inputId = `kin${personNum}input`;
+  let inp = document.getElementById(inputId);
+  if(!inp) return;
+  
+  // إيقاف أي بحث صوتي جاري
+  if(_voiceRecognition){
+    _voiceRecognition.stop();
+    _voiceRecognition = null;
+    _setVoiceActive(false);
+  }
+  
+  let r = new SpeechRecog();
+  r.lang = 'ar-SA';
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+  _voiceRecognition = r;
+  _setVoiceActiveKin(true, personNum);
+  
+  r.onresult = e=>{
+    let transcript = Array.from(e.results)
+      .map(res=>res[0].transcript)
+      .join('');
+    transcript = transcript.replace(/[\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u060C\u061B\u061F\u06D4\u002E\u066A-\u066D]+$/u, '').trim();
+    inp.value = transcript;
+    kinSearch(transcript, personNum);
+  };
+  r.onend = ()=>{ _voiceRecognition=null; _setVoiceActiveKin(false, personNum); };
+  r.onerror = e=>{ _voiceRecognition=null; _setVoiceActiveKin(false, personNum); };
+  
+  try { r.start(); } catch(err){ _voiceRecognition=null; _setVoiceActiveKin(false, personNum); }
 }
 
-function mssVoiceSearch(){ startVoiceSearch('mss-input'); }
+/**
+ * البحث الصوتي لحقل "أنا في الشجرة"
+ */
+function startMyPersonVoiceSearch(){
+  let SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecog){
+    alert('متصفحك لا يدعم البحث الصوتي. استخدم Chrome أو Edge.');
+    return;
+  }
+  
+  let inp = document.getElementById('mySearchInput');
+  if(!inp) return;
+  
+  if(_voiceRecognition){
+    _voiceRecognition.stop();
+    _voiceRecognition = null;
+    _setVoiceActive(false);
+  }
+  
+  let r = new SpeechRecog();
+  r.lang = 'ar-SA';
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+  _voiceRecognition = r;
+  _setVoiceActiveMy(true);
+  
+  r.onresult = e=>{
+    let transcript = Array.from(e.results)
+      .map(res=>res[0].transcript)
+      .join('');
+    transcript = transcript.replace(/[\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u060C\u061B\u061F\u06D4\u002E\u066A-\u066D]+$/u, '').trim();
+    inp.value = transcript;
+    filterMyPicker(transcript);
+  };
+  r.onend = ()=>{ _voiceRecognition=null; _setVoiceActiveMy(false); };
+  r.onerror = e=>{ _voiceRecognition=null; _setVoiceActiveMy(false); };
+  
+  try { r.start(); } catch(err){ _voiceRecognition=null; _setVoiceActiveMy(false); }
+}
+
+/**
+ * البحث الصوتي لحقل قائمة الأفراد
+ */
+function startListVoiceSearch(){
+  let SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecog){
+    alert('متصفحك لا يدعم البحث الصوتي. استخدم Chrome أو Edge.');
+    return;
+  }
+  
+  let inp = document.getElementById('listSearchBox');
+  if(!inp) return;
+  
+  if(_voiceRecognition){
+    _voiceRecognition.stop();
+    _voiceRecognition = null;
+    _setVoiceActive(false);
+  }
+  
+  let r = new SpeechRecog();
+  r.lang = 'ar-SA';
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+  _voiceRecognition = r;
+  _setVoiceActiveList(true);
+  
+  r.onresult = e=>{
+    let transcript = Array.from(e.results)
+      .map(res=>res[0].transcript)
+      .join('');
+    transcript = transcript.replace(/[\u0021-\u002F\u003A-\u0040\u005B-\u0060\u007B-\u007E\u060C\u061B\u061F\u06D4\u002E\u066A-\u066D]+$/u, '').trim();
+    inp.value = transcript;
+    setListSearch(transcript, false);
+  };
+  r.onend = ()=>{ _voiceRecognition=null; _setVoiceActiveList(false); };
+  r.onerror = e=>{ _voiceRecognition=null; _setVoiceActiveList(false); };
+  
+  try { r.start(); } catch(err){ _voiceRecognition=null; _setVoiceActiveList(false); }
+}
+
+// دوال مساعدة لتعيين حالة البحث الصوتي الفعال
+function _setVoiceActiveKin(on, personNum){
+  let btn = document.querySelector(`[onclick*="startKinVoiceSearch(${personNum})"]`) || document.querySelector(`#kin${personNum}voice`);
+  if(btn) btn.classList.toggle('voice-active', on);
+  if(on){
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  }
+}
+
+function _setVoiceActiveMy(on){
+  let btn = document.querySelector('[onclick*="startMyPersonVoiceSearch"]') || document.querySelector('#myPersonVoice');
+  if(btn) btn.classList.toggle('voice-active', on);
+  if(on){
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  }
+}
+
+function _setVoiceActiveList(on){
+  let btn = document.querySelector('[onclick*="startListVoiceSearch"]') || document.querySelector('#listVoice');
+  if(btn) btn.classList.toggle('voice-active', on);
+  if(on){
+    let t = document.getElementById('saveToast');
+    if(t){ t.style.background='#7c3aed'; t.textContent='🎤 استمع...'; t.style.opacity='1'; }
+  }
+}
+
 function _setVoiceActive(on){
   let btns = document.querySelectorAll('#mss-mic-btn, [onclick*="startVoiceSearch"]');
   btns.forEach(b=>b.classList.toggle('voice-active', on));
