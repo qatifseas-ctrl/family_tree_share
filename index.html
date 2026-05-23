@@ -172,6 +172,75 @@
   }
 
 })();
+
+// ════════════════════════════════════════════════════════════
+//  معالج الزر الخلفي (Android Back Button + Escape)
+// ════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  // ── دالة معالجة الرجوع الموحدة ──
+  function handleBackPress() {
+    // 1. التحقق من وجود modal مفتوح
+    let modalContainer = document.getElementById('modalContainer');
+    if (modalContainer && modalContainer.innerHTML.trim()) {
+      closeModal();
+      return true;
+    }
+
+    // 2. التحقق من وجود Search Sheet مفتوح
+    let mssSheet = document.getElementById('mss-sheet');
+    if (mssSheet && mssSheet.classList.contains('open')) {
+      closeMobSearchSheet();
+      return true;
+    }
+
+    // 3. التحقق من وجود قائمة الأفراد أو كاشف القرابة أو دليل الاستخدام (التبويبات الجانبية)
+    let currentTab = document.querySelector('.tab.active');
+    if (currentTab) {
+      let tabName = currentTab.textContent.trim();
+      // إذا كنا في قائمة الأفراد (List) أو كاشف القرابة (Kinship) أو دليل الاستخدام (Guide)
+      if (tabName === 'قائمة الأفراد' || tabName === 'كاشف القرابة' || tabName === 'دليل الاستخدام') {
+        // ارجع للشجرة الرئيسية
+        let treeTab = document.querySelector('.tab[data-tab="tree"]') || 
+                      Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('الشجرة'));
+        if (treeTab) {
+          treeTab.click();
+          return true;
+        }
+      }
+    }
+
+    // 4. إذا كان هناك breadcrumb navigation (شجرة عائلة مفتوحة)
+    if (navStack && navStack.length > 0) {
+      navigateBack();
+      return true;
+    }
+
+    // 5. إذا لم يكن هناك شيء — اترك التطبيق يخرج (السلوك الطبيعي)
+    return false;
+  }
+
+  // ── معالج Android Back Button ──
+  document.addEventListener('backbutton', function(e) {
+    if (handleBackPress()) {
+      e.preventDefault();
+    }
+  }, false);
+
+  // ── معالج Escape للويب ──
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      handleBackPress();
+    }
+  }, false);
+
+  // ── معالج popstate (Browser Back) ──
+  window.addEventListener('popstate', function() {
+    handleBackPress();
+  });
+
+})();
 </script>
 
 <!-- ═══ PWA UI Styles (install banner + iOS tip + update toast) ═══ -->
