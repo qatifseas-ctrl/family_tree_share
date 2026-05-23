@@ -172,96 +172,6 @@
   }
 
 })();
-
-// ════════════════════════════════════════════════════════════
-//  معالج الزر الخلفي (Android Back Button + Escape)
-// ════════════════════════════════════════════════════════════
-(function() {
-  'use strict';
-
-  // ── دالة معالجة الرجوع الموحدة ──
-  window.handleBackPress = function() {
-    // 1. التحقق من وجود modal مفتوح
-    let modalContainer = document.getElementById('modalContainer');
-    if (modalContainer && modalContainer.innerHTML.trim()) {
-      closeModal();
-      return true;
-    }
-
-    // 2. التحقق من وجود Search Sheet مفتوح
-    let mssSheet = document.getElementById('mss-sheet');
-    if (mssSheet && mssSheet.classList.contains('open')) {
-      closeMobSearchSheet();
-      return true;
-    }
-
-    // 3. التحقق من وجود قائمة الأفراد أو كاشف القرابة أو دليل الاستخدام
-    let currentTab = document.querySelector('.tab.active');
-    if (currentTab) {
-      let tabName = currentTab.textContent.trim();
-      if (tabName === 'قائمة الأفراد' || tabName === 'كاشف القرابة' || tabName === 'دليل الاستخدام') {
-        let treeTab = document.querySelector('.tab[data-tab="tree"]') || 
-                      Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('الشجرة'));
-        if (treeTab) {
-          treeTab.click();
-          return true;
-        }
-      }
-    }
-
-    // 4. إذا كان هناك breadcrumb navigation (شجرة عائلة مفتوحة)
-    if (typeof navStack !== 'undefined' && navStack && navStack.length > 0) {
-      navigateBack();
-      return true;
-    }
-
-    // 5. إذا لم يكن هناك شيء — اترك التطبيق يخرج (السلوك الطبيعي)
-    return false;
-  };
-
-  // ── معالج Escape للويب ──
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      window.handleBackPress();
-    }
-  }, false);
-
-  // ── معالج popstate (Browser Back) ──
-  window.addEventListener('popstate', function() {
-    window.handleBackPress();
-  });
-
-  // ── معالج Android Back Button (Cordova) ──
-  document.addEventListener('backbutton', function(e) {
-    console.log('[BackButton] Cordova back button pressed');
-    if (window.handleBackPress()) {
-      e.preventDefault();
-    }
-  }, false);
-
-  // ── معالج Capacitor (الحل الحديث للأندرويد) ──
-  window.addEventListener('load', function() {
-    // تحقق من وجود Capacitor
-    if (typeof window.Capacitor !== 'undefined') {
-      console.log('[BackButton] Capacitor detected - setting up handler');
-      
-      // استيراد المكونات اللازمة
-      if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-        const { App } = window.Capacitor.Plugins;
-        
-        // معالج الضغط على الزر الخلفي في Capacitor
-        App.addListener('backButton', () => {
-          console.log('[BackButton] Capacitor back button pressed');
-          if (!window.handleBackPress()) {
-            // إذا لم نتعامل مع الحدث، اسمح للتطبيق بالخروج
-            App.exitApp();
-          }
-        });
-      }
-    }
-  });
-
-})();
 </script>
 
 <!-- ═══ PWA UI Styles (install banner + iOS tip + update toast) ═══ -->
@@ -3804,6 +3714,7 @@ function showRelInfo(id,pairNum){
   document.getElementById('modalContainer').innerHTML=modal;
 }
 function navigateToPerson(id){
+  _pushAndroidTreeSnapshot();
   let targetP=getPerson(id);
   if(!targetP)return;
 
@@ -3869,6 +3780,7 @@ function navigateToPerson(id){
 }
 // Navigate back to main tree and highlight a specific person (used by external tree wife-links)
 function navigateToMainForPerson(personId){
+  _pushAndroidTreeSnapshot();
   navStack=[];currentFamilyFilter=null;
   renderAll();
   setTimeout(()=>{
@@ -5535,6 +5447,7 @@ function renderNavBreadcrumb(){
   return banner+breadcrumb;
 }
 function navigateToSpouseFamily(personId){
+  _pushAndroidTreeSnapshot();
   let sp=getPerson(personId);if(!sp)return;
   // Walk up to find the root of this person's family
   let cur=sp;
@@ -5598,6 +5511,166 @@ function navigateToBreadcrumb(idx){
 }
 // ══════════════════════════════════════════════════════════
 function closeModal(){document.getElementById('modalContainer').innerHTML='';tempPhoto=null;}
+
+// ══════════════════════════════════════════════════════════
+//  Android / Browser Back Button — smart internal navigation
+// ══════════════════════════════════════════════════════════
+let _androidBackReady=false;
+window._ftTreeBackStack=window._ftTreeBackStack||[];
+
+function _getActiveTabName(){
+  let tabs=document.querySelectorAll('.tab');
+  let panels=[
+    document.getElementById('treePanel'),
+    document.getElementById('listPanel'),
+    document.getElementById('kinPanel'),
+    document.getElementById('guidePanel')
+  ];
+  let names=['tree','list','kin','guide'];
+  for(let i=0;i<panels.length;i++){
+    if(panels[i] && panels[i].classList.contains('active')) return names[i];
+  }
+  return 'tree';
+}
+
+function _getTabElementByName(name){
+  let tabs=document.querySelectorAll('.tab');
+  if(name==='list') return tabs[1]||tabs[0];
+  if(name==='kin') return tabs[2]||tabs[0];
+  if(name==='guide') return tabs[3]||tabs[0];
+  return tabs[0]||null;
+}
+
+function _pushAndroidHistoryState(){
+  if(!history || !history.pushState) return;
+  try{
+    history.pushState({_ftBackGuard:true}, '', location.href);
+  }catch(e){}
+}
+
+function _restoreAndroidTreeSnapshot(){
+  let stack=window._ftTreeBackStack||[];
+  let snap=stack.pop();
+  if(!snap) return false;
+  try{
+    expanded=snap.expanded?JSON.parse(JSON.stringify(snap.expanded)):{};
+    currentFamilyFilter=snap.currentFamilyFilter?JSON.parse(JSON.stringify(snap.currentFamilyFilter)):null;
+    navStack=Array.isArray(snap.navStack)?JSON.parse(JSON.stringify(snap.navStack)):[];
+  }catch(e){
+    // fallback if cloning fails
+    expanded=snap.expanded||{};
+    currentFamilyFilter=snap.currentFamilyFilter||null;
+    navStack=Array.isArray(snap.navStack)?snap.navStack.slice():[];
+  }
+  renderAll();
+  let tabEl=_getTabElementByName(snap.tab||'tree');
+  if((snap.tab||'tree')!=='tree') switchTab(snap.tab,tabEl||_getTabElementByName('tree'));
+  setTimeout(function(){
+    window.scrollTo({top:snap.scrollY||0,behavior:'smooth'});
+  },80);
+  return true;
+}
+
+function _pushAndroidTreeSnapshot(){
+  try{
+    window._ftTreeBackStack=window._ftTreeBackStack||[];
+    window._ftTreeBackStack.push({
+      expanded:JSON.parse(JSON.stringify(expanded||{})),
+      currentFamilyFilter:currentFamilyFilter?JSON.parse(JSON.stringify(currentFamilyFilter)):null,
+      navStack:JSON.parse(JSON.stringify(navStack||[])),
+      scrollY:window.scrollY||0,
+      tab:_getActiveTabName()
+    });
+    if(window._ftTreeBackStack.length>20) window._ftTreeBackStack.shift();
+  }catch(e){}
+}
+
+function _closeBackTarget(){
+  // 1) أي نافذة منبثقة
+  let modalContainer=document.getElementById('modalContainer');
+  if(modalContainer && modalContainer.innerHTML){
+    closeModal();
+    return true;
+  }
+
+  // 2) لوحة البحث السفلية / نتائج البحث
+  let mssSheet=document.getElementById('mss-sheet');
+  if(mssSheet && mssSheet.classList.contains('open')){
+    closeMobSearchSheet();
+    return true;
+  }
+  if(_lastSearchQ || (document.getElementById('searchBox') && document.getElementById('searchBox').value)){
+    if(document.getElementById('searchResultsPanel') && document.getElementById('searchResultsPanel').style.display!=='none'){
+      clearSearch();
+      return true;
+    }
+  }
+
+  // 3) شيت إجراءات الشخص
+  let actionSheet=document.getElementById('mob-action-sheet');
+  if(actionSheet && actionSheet.classList.contains('open')){
+    closeMobSheet();
+    return true;
+  }
+
+  return false;
+}
+
+function _handleAndroidBack(){
+  // 1) Modal مفتوح
+  if(_closeBackTarget()) return true;
+
+  // 2) تبويب جانبي مفتوح → العودة للشجرة
+  if(_getActiveTabName()!=='tree'){
+    let treeTab=_getTabElementByName('tree');
+    if(treeTab) switchTab('tree',treeTab);
+    _pushAndroidHistoryState();
+    return true;
+  }
+
+  // 3) في شجرة عميقة → الصعود خطوة واحدة في سياق العائلة
+  if(navStack.length>0 || currentFamilyFilter){
+    // أولوية الصعود داخل الشجرة
+    if(navStack.length>0){
+      navigateBack();
+    } else {
+      navigateHome();
+    }
+    _pushAndroidHistoryState();
+    return true;
+  }
+
+  // 4) الرجوع داخل تنقّل الشجرة المنظوري (expand/collapse snapshot)
+  if(window._ftTreeBackStack && window._ftTreeBackStack.length){
+    if(_restoreAndroidTreeSnapshot()){
+      _pushAndroidHistoryState();
+      return true;
+    }
+  }
+
+  // 5) لا شيء → خروج طبيعي
+  return false;
+}
+
+function _initAndroidBackNavigation(){
+  if(_androidBackReady) return;
+  if(!history || !history.pushState) return;
+  _androidBackReady=true;
+
+  try{
+    // نضع علامة داخل سجل التاريخ حتى تلتقطنا popstate قبل الخروج
+    history.replaceState({_ftBackGuard:true}, '', location.href);
+    history.pushState({_ftBackGuard:true}, '', location.href);
+  }catch(e){}
+
+  window.addEventListener('popstate', function(){
+    if(_handleAndroidBack()){
+      // نعيد نقطة الالتقاط حتى يظل زر الرجوع يعمل داخل التطبيق
+      _pushAndroidHistoryState();
+    }
+  });
+}
+
 // ── My Person (منظوري أنا) ──
 let myPersonId=null;
 const MY_KEY='family_tree_myPerson';
@@ -8587,6 +8660,7 @@ deletePerson=function(id){
   // ── تهيئة وضع الجوال ──
   initMobileMode();
   renderAll();
+  _initAndroidBackNavigation();
   // تهيئة الحفظ السحابي
   await initCloud();
   // ── إظهار بانر الجهاز الجديد إذا كانت السحابة مُعدَّة ──
