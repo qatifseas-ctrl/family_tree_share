@@ -9530,7 +9530,9 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
   var FV_TABLE    = 'family_updates';
   var FV_SCHEMA   = 1;
   var FV_HASH_KEY = 'ft_fu_hash_v4';
-  var FV_DEBOUNCE = 5000;
+  var FV_DEBOUNCE     = 90000;        /* 90 ثانية — انتظر هدوء التعديلات */
+  var FV_MIN_INTERVAL = 5*60*1000;   /* 5 دقائق حد أدنى بين الرفعات */
+  var FV_LAST_TS_KEY  = 'ft_fu_last_ts_v4';
   var FV_AUTH_KEY = 'ft_sb_auth_v1'; /* cache JWT للـ anonymous session */
 
   function log(){
@@ -9712,6 +9714,11 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
     _fvUploading=true;
     var keyHex=fvKey();
     if(!keyHex){log('لا مفتاح تشفير');_fvUploading=false;return;}
+    /* فحص الحد الأدنى 5 دقائق بين الرفعات */
+    try{
+      var lastTs=parseInt(localStorage.getItem(FV_LAST_TS_KEY)||'0',10);
+      if(Date.now()-lastTs < FV_MIN_INTERVAL){log('أقل من 5 دقائق منذ آخر رفع');_fvUploading=false;return;}
+    }catch(e){}
 
     fvHasChanges().then(function(changed){
       if(!changed){log('لا تغيير — تم التخطي');return;}
@@ -9744,6 +9751,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
       }).then(function(){
         return fvHash().then(function(h){
           try{localStorage.setItem(FV_HASH_KEY,h);}catch(e){}
+          try{localStorage.setItem(FV_LAST_TS_KEY,String(Date.now()));}catch(e){}
           log('✓ رُفع بنجاح — family:',fvSettings().syncId,'device:',fvDevId());
         });
       });
