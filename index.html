@@ -8798,11 +8798,12 @@ function dismissInstallBanner(){
     <style>
     #mob-fab {
       position:fixed;bottom:24px;left:16px;
-      display:flex;flex-direction:column;gap:10px;
+      display:none;flex-direction:column;gap:10px;
       z-index:400;
       opacity:0;pointer-events:none;
       transition:opacity .25s;
     }
+    body.mobile-mode #mob-fab { display:flex; }
     #mob-fab.visible { opacity:1;pointer-events:auto; }
     .mob-fab-btn {
       width:46px;height:46px;border-radius:50%;
@@ -8817,53 +8818,92 @@ function dismissInstallBanner(){
     .mob-fab-search { background:#1e40af;color:#fff; font-size:18px; }
     </style>
     <button id="mob-fab-search-btn" class="mob-fab-btn mob-fab-search" onclick="openSearchPanel()" title="بحث سريع">🔍</button>
-    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="للأعلى">↑</button>
+    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo(0,0)" title="للأعلى">↑</button>
   `;
   document.body.appendChild(fab);
 
   let _autoHideTimer = null;
   let _isMobileMode = document.body.classList.contains('mobile-mode');
+  let _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
-  function updateFabVisibility() {
-    _isMobileMode = document.body.classList.contains('mobile-mode');
-    
-    if (_isMobileMode) {
-      // وضع الجوال: إظهار عند التمرير أو الحركة، إخفاء تلقائي بعد 2 ثانية
-      if (window.scrollY > 200) {
-        fab.classList.add('visible');
-        // إعادة تعيين مؤقت الإخفاء التلقائي
-        clearTimeout(_autoHideTimer);
-        _autoHideTimer = setTimeout(() => {
-          fab.classList.remove('visible');
-        }, 2000);
-      }
-    } else {
-      // وضع الديسكتوب: ثابت دائماً
-      fab.classList.add('visible');
+  function _clearAutoHideTimer() {
+    if (_autoHideTimer) {
       clearTimeout(_autoHideTimer);
+      _autoHideTimer = null;
     }
   }
 
-  // أظهر الزر عند التمرير والحركة (مع مراعاة وضع الجوال)
-  window.addEventListener('scroll', updateFabVisibility, { passive: true });
-  
-  // إظهار الزر عند أي تفاعل في الشجرة (حركة الماوس أو اللمس)
-  document.addEventListener('mousemove', () => {
-    if (_isMobileMode) {
-      fab.classList.add('visible');
-      clearTimeout(_autoHideTimer);
-      _autoHideTimer = setTimeout(() => {
+  function _hideFab() {
+    fab.classList.remove('visible');
+    _clearAutoHideTimer();
+  }
+
+  function _showFab() {
+    if (!_isMobileMode) return;
+    fab.classList.add('visible');
+    _clearAutoHideTimer();
+    _autoHideTimer = setTimeout(() => {
+      if (document.body.classList.contains('mobile-mode')) {
         fab.classList.remove('visible');
-      }, 2000);
+      }
+    }, 2000);
+  }
+
+  function _syncFabMode() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+
+    if (_isMobileMode) {
+      fab.style.display = 'flex';
+      _hideFab();
+    } else {
+      _hideFab();
+      fab.style.display = 'none';
     }
+  }
+
+  function updateFabVisibility() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    if (!_isMobileMode) {
+      _hideFab();
+      return;
+    }
+
+    let currentY = window.scrollY || document.documentElement.scrollTop || 0;
+    let delta = currentY - _lastScrollY;
+    _lastScrollY = currentY;
+
+    if (currentY < 120) {
+      _hideFab();
+      return;
+    }
+
+    if (delta < -12) {
+      _showFab();
+      return;
+    }
+
+    if (delta > 12) {
+      _hideFab();
+    }
+  }
+
+  // أظهر/أخفِ فقط وفق اتجاه التمرير في وضع الجوال
+  window.addEventListener('scroll', updateFabVisibility, { passive: true });
+
+  // عند أي تفاعل لمس في الجوال نعيد التقييم من دون إظهار مبكر
+  document.addEventListener('touchend', () => {
+    if (!document.body.classList.contains('mobile-mode')) return;
+    setTimeout(updateFabVisibility, 0);
   }, { passive: true });
 
   // إعادة تقييم عند تبديل وضع الجوال
   window._updateFabMobileMode = () => {
-    updateFabVisibility();
+    _syncFabMode();
   };
 
   // التحقق الأولي
+  _syncFabMode();
   updateFabVisibility();
 })();
 
