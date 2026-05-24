@@ -9788,6 +9788,8 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
       try{localStorage.removeItem(FV_HASH_KEY);}catch(e){}
       /* إنشاء معرّف جهاز جديد — لا نأخذه من meta */
       try{localStorage.removeItem('ft_family_device_id');}catch(e){}
+      try{localStorage.removeItem('ft_fu_hash_v4');}catch(e){}
+      try{localStorage.removeItem('ft_fu_last_ts_v4');}catch(e){}
       log('[Import] Supabase settings applied — syncId:',m.sbSyncId||'—');
     }
 
