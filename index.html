@@ -3358,6 +3358,10 @@ function doExportJSONFamily(withPhotos){
       gistId:fuGid,
       pat:fuPat,
       keyHex:fuKey,
+      sbUrl:(localStorage.getItem('ft_supabase_url_v1')||'').trim(),
+      sbAnonKey:(localStorage.getItem('ft_supabase_anon_v1')||'').trim(),
+      sbSyncId:(localStorage.getItem('ft_supabase_sync_id_v1')||'family-sync').trim(),
+      sbBucket:(localStorage.getItem('ft_supabase_bucket_v1')||'family-tree').trim(),
       exportedAt:new Date().toISOString(),
       exportedBy:'owner'
     }
@@ -6750,6 +6754,48 @@ async function _familyParseUpdateRaw(raw,keyHex){
 }
 
 async function openFamilyUpdatesModal(){
+  // ── Supabase family updates أولاً إن كانت الإعدادات جاهزة ──
+  try{
+    if (typeof fvReady === 'function' && fvReady() && typeof fvSelect === 'function') {
+      document.getElementById('modalContainer').innerHTML=
+        '<div class="modal-overlay"><div class="modal" style="max-width:480px;text-align:center"><div style="font-size:32px;margin-bottom:12px">📡</div><div style="font-size:14px;color:var(--text)">جارٍ جلب تحديثات العائلة...</div></div></div>';
+      var familyId = (typeof fvFamilyId === 'function' ? fvFamilyId() : ((localStorage.getItem('ft_supabase_sync_id_v1')||'family-sync').trim()));
+      return fvSelect(familyId).then(function(rows){
+        if(!rows || !rows.length){ _fuModalEmpty(familyId); return; }
+        var tasks = rows.map(function(row){
+          return Promise.resolve().then(function(){
+            if(!(row && row.iv && row.payload_encrypted)) throw new Error('بيانات مشفرة غير صالحة');
+            var ivBytes = _base64ToBytes(row.iv);
+            var cBytes = _base64ToBytes(row.payload_encrypted);
+            var both = new Uint8Array(ivBytes.length + cBytes.length);
+            both.set(ivBytes,0); both.set(cBytes,ivBytes.length);
+            var bin=''; for(var i=0;i<both.length;i++) bin += String.fromCharCode(both[i]);
+            return typeof cloudDecrypt==='function' ? cloudDecrypt(btoa(bin)) : Promise.reject(new Error('تعذّر فك التشفير'));
+          }).then(function(plain){
+            var data = JSON.parse(plain);
+            if(!Array.isArray(data && data.people)) throw new Error('بنية غير صالحة');
+            var summary = typeof _familySummarizeUpdate==='function' ? _familySummarizeUpdate(data) : {newPeople:[],updatedPeople:[],unchangedPeople:[],stats:{}};
+            return {row:row,data:data,errMsg:'',summary:summary};
+          }).catch(function(e){
+            return {row:row,data:null,errMsg:e.message||'خطأ',summary:{newPeople:[],updatedPeople:[],unchangedPeople:[],stats:{}}};
+          });
+        });
+        return Promise.all(tasks).then(function(parsed){
+          window._familyUpdates=parsed;
+          _fuModalList(parsed,familyId);
+        });
+      }).catch(function(e){
+        var msg=String(e.message||e);
+        document.getElementById('modalContainer').innerHTML=
+          '<div class="modal-overlay" onclick="if(event.target===this)closeModal()">'
+          +'<div class="modal" style="max-width:480px"><h3>📡 تحديثات العائلة</h3>'
+          +'<div style="padding:12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:13px;color:#991b1b">❌ '+escapeHtml(msg)+'</div>'
+          +'<div class="modal-footer"><button class="btn" onclick="closeModal()">إغلاق</button>'
+          +'<button class="btn" onclick="window._fuShowSQL && window._fuShowSQL()">🛠 SQL</button></div></div></div>';
+      });
+    }
+  }catch(e){}
+
   let gistId=FAMILY_UPLOAD_CONFIG.GIST_ID||localStorage.getItem(FAMILY_UPLOAD_GIST_KEY)||localStorage.getItem('ft_fupload_gid')||'';
   // ⚠️ لا نستخدم CLOUD_CONFIG.GITHUB_PAT كـ fallback — له صلاحية repo وليس gist → 401
   // المصدر الوحيد المسموح به: FAMILY_UPLOAD_CONFIG أو localStorage ft_fupload_pat
