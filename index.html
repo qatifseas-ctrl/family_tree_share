@@ -9515,5 +9515,301 @@ function _setVoiceActive(on){
 document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMergeHistoryButtons,0);});
 
 </script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     FAMILY VERSION — SUPABASE UPLOAD MODULE (v4)
+     وحدة مستقلة تُضيف الرفع إلى Supabase بدون الحاجة لأي مكتبة خارجية
+     تستبدل نظام Gist القديم بالكامل
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  /* ── ثوابت ─────────────────────────────────────────────────────────── */
+  var FV_TABLE    = 'family_updates';
+  var FV_SCHEMA   = 1;
+  var FV_HASH_KEY = 'ft_fu_hash_v4';
+  var FV_DEBOUNCE = 5000;
+  var FV_AUTH_KEY = 'ft_sb_auth_v1'; /* cache JWT للـ anonymous session */
+
+  function log(){
+    var a=Array.prototype.slice.call(arguments);
+    a.unshift('[FV]'); console.debug.apply(console,a);
+  }
+
+  /* ── إعدادات Supabase من localStorage (المفاتيح الصحيحة) ───────────── */
+  function fvSettings(){
+    function ls(k){try{return(localStorage.getItem(k)||'').trim();}catch(e){return'';}}
+    return {
+      url:     ls('ft_supabase_url_v1'),
+      anonKey: ls('ft_supabase_anon_v1'),
+      syncId:  ls('ft_supabase_sync_id_v1')||'family-sync',
+      bucket:  ls('ft_supabase_bucket_v1')||'family-tree',
+      keyHex:  ls('ft_supabase_key_v1')||ls('ft_cloud_key')
+               ||(window.CLOUD_CONFIG&&window.CLOUD_CONFIG.KEY_HEX||'')
+    };
+  }
+
+  /* ── مفتاح التشفير ──────────────────────────────────────────────────── */
+  function fvKey(){
+    var k=(fvSettings().keyHex||'').trim();
+    if(/^[0-9a-fA-F]{64}$/.test(k)) return k.toLowerCase();
+    /* fallback: مفتاح FAMILY_UPLOAD_CONFIG القديم */
+    try{
+      var fk=(window.FAMILY_UPLOAD_CONFIG&&window.FAMILY_UPLOAD_CONFIG.KEY_HEX)||'';
+      if(/^[0-9a-fA-F]{64}$/.test(fk)) return fk.toLowerCase();
+    }catch(e){}
+    return '';
+  }
+
+  /* ── هل Supabase جاهزة؟ ─────────────────────────────────────────────── */
+  function fvReady(){
+    var s=fvSettings();
+    return !!(s.url&&s.url.indexOf('https://')===0&&s.anonKey&&s.anonKey.length>20&&fvKey());
+  }
+
+  /* ── معرّف الجهاز ───────────────────────────────────────────────────── */
+  function fvDevId(){
+    try{
+      /* استخدم FAMILY_DEVICE_ID المضمَّن في الملف عند أول تشغيل */
+      var id=localStorage.getItem('ft_family_device_id')||'';
+      if(!id){
+        id=(typeof FAMILY_DEVICE_ID!=='undefined'&&FAMILY_DEVICE_ID)
+          ? FAMILY_DEVICE_ID
+          : [].slice.call(crypto.getRandomValues(new Uint8Array(6)))
+              .map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+        localStorage.setItem('ft_family_device_id',id);
+      }
+      return id;
+    }catch(e){return'unknown';}
+  }
+
+  function fvDevName(){
+    try{return localStorage.getItem('ft_family_device_name')||fvDevId();}catch(e){return fvDevId();}
+  }
+
+  /* ── Anonymous Auth — الحصول على JWT (مع cache) ─────────────────────── */
+  function fvGetToken(){
+    var s=fvSettings();
+    if(!s.url||!s.anonKey) return Promise.reject(new Error('إعدادات Supabase ناقصة'));
+    /* التحقق من الـ cache */
+    try{
+      var cached=JSON.parse(localStorage.getItem(FV_AUTH_KEY)||'{}');
+      if(cached.access_token && cached.expires_at > (Date.now()/1000)+300){
+        return Promise.resolve(cached.access_token);
+      }
+    }catch(e){}
+    /* محاولة anonymous sign-in */
+    return fetch(s.url+'/auth/v1/token?grant_type=anonymous',{
+      method:'POST',
+      headers:{'apikey':s.anonKey,'Content-Type':'application/json'},
+      body:'{}'
+    }).then(function(r){return r.json();})
+    .then(function(d){
+      if(d.access_token){
+        try{localStorage.setItem(FV_AUTH_KEY,JSON.stringify({
+          access_token:d.access_token,
+          expires_at:d.expires_at||(Date.now()/1000+3600)
+        }));}catch(e){}
+        return d.access_token;
+      }
+      /* fallback: استخدم anonKey مباشرةً (يتطلب RLS بـ TO anon) */
+      log('Anonymous auth failed — using anon key directly');
+      return s.anonKey;
+    })
+    .catch(function(){
+      /* شبكة فاشلة — استخدم anonKey مباشرةً */
+      return s.anonKey;
+    });
+  }
+
+  /* ── INSERT مباشر إلى Supabase REST API بدون مكتبة ─────────────────── */
+  function fvInsert(row){
+    var s=fvSettings();
+    if(!s.url||!s.anonKey) return Promise.reject(new Error('إعدادات Supabase ناقصة'));
+    return fvGetToken().then(function(token){
+      return fetch(s.url+'/rest/v1/'+FV_TABLE,{
+        method:'POST',
+        headers:{
+          'apikey':     s.anonKey,
+          'Authorization':'Bearer '+token,
+          'Content-Type':'application/json',
+          'Prefer':     'return=minimal'
+        },
+        body:JSON.stringify(row)
+      });
+    }).then(function(res){
+      if(!res.ok){
+        return res.json().catch(function(){return{};}).then(function(e){
+          throw new Error('Supabase '+(res.status)+': '+(e.message||e.error||'unknown'));
+        });
+      }
+    });
+  }
+
+  /* ── SHA-256 وكشف التغييرات ─────────────────────────────────────────── */
+  function fvSHA256(str){
+    return crypto.subtle.digest('SHA-256',new TextEncoder().encode(str))
+      .then(function(buf){
+        return [].slice.call(new Uint8Array(buf))
+          .map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+      });
+  }
+
+  function fvHash(){
+    try{
+      var p=(Array.isArray(people)?people:[]).map(function(p){
+        if(!p)return null; var r=Object.assign({},p); delete r.photo; return r;
+      }).filter(Boolean);
+      var sig=JSON.stringify({
+        people:p,
+        relPairs:Array.isArray(relPairs)?relPairs:[],
+        nextId:nextId||0
+      });
+      return fvSHA256(sig);
+    }catch(e){return Promise.resolve('');}
+  }
+
+  function fvHasChanges(){
+    return fvHash().then(function(h){
+      if(!h)return false;
+      try{return h!==(localStorage.getItem(FV_HASH_KEY)||'');}catch(e){return true;}
+    });
+  }
+
+  /* ── AES-GCM تشفير ──────────────────────────────────────────────────── */
+  function fvEncrypt(plain,keyHex){
+    if(!keyHex)return Promise.reject(new Error('مفتاح التشفير مفقود'));
+    var keyBytes=_hexToBytes(keyHex); /* _hexToBytes موجودة في الملف الأصلي */
+    return crypto.subtle.importKey('raw',keyBytes,{name:'AES-GCM'},false,['encrypt'])
+      .then(function(key){
+        var iv=crypto.getRandomValues(new Uint8Array(12));
+        return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(plain))
+          .then(function(enc){
+            return fvSHA256(plain).then(function(cs){
+              return {
+                iv:_bytesToBase64(iv),
+                payload_encrypted:_bytesToBase64(new Uint8Array(enc)),
+                checksum:cs
+              };
+            });
+          });
+      });
+  }
+
+  /* ── الرفع الصامت — Supabase family_updates ─────────────────────────── */
+  var _fvUploading=false, _fvTimer=null;
+
+  function triggerFamilyUpload(){
+    if(!fvReady())return;
+    clearTimeout(_fvTimer);
+    _fvTimer=setTimeout(_doSilentFamilyUpload,FV_DEBOUNCE);
+  }
+
+  function _doSilentFamilyUpload(){
+    if(!fvReady()||_fvUploading)return;
+    _fvUploading=true;
+    var keyHex=fvKey();
+    if(!keyHex){log('لا مفتاح تشفير');_fvUploading=false;return;}
+
+    fvHasChanges().then(function(changed){
+      if(!changed){log('لا تغيير — تم التخطي');return;}
+      var arr=Array.isArray(people)?people:[];
+      if(!arr.length){log('قائمة فارغة');return;}
+
+      var payload=JSON.parse(JSON.stringify({
+        people:arr,
+        relPairs:Array.isArray(relPairs)?relPairs:[],
+        nextId:nextId||1,
+        myPersonId:(typeof myPersonId!=='undefined'?myPersonId:null),
+        uploadedAt:new Date().toISOString(),
+        deviceId:fvDevId(),
+        deviceName:fvDevName()
+      }));
+      payload.people.forEach(function(p){if(p&&p.photo)delete p.photo;});
+      var plain=JSON.stringify(payload);
+
+      return fvEncrypt(plain,keyHex).then(function(enc){
+        return fvInsert({
+          family_id:  fvSettings().syncId,
+          device_id:  fvDevId(),
+          device_name:fvDevName(),
+          schema_version:FV_SCHEMA,
+          payload_encrypted:enc.payload_encrypted,
+          iv:enc.iv,
+          checksum:enc.checksum,
+          update_type:'auto'
+        });
+      }).then(function(){
+        return fvHash().then(function(h){
+          try{localStorage.setItem(FV_HASH_KEY,h);}catch(e){}
+          log('✓ رُفع بنجاح — family:',fvSettings().syncId,'device:',fvDevId());
+        });
+      });
+    }).catch(function(e){
+      log('✗ فشل الرفع:',e.message||e);
+    }).then(function(){_fvUploading=false;});
+  }
+
+  /* ── تطبيق meta من JSON المستورَد (Supabase + device ID صحيح) ────────── */
+  var _origApplyMeta=typeof _applyFamilyMetaIfNeeded==='function'
+    ?_applyFamilyMetaIfNeeded:null;
+
+  function _applyFamilyMetaIfNeeded(data){
+    if(!data||!data._familyMeta){
+      if(_origApplyMeta)try{_origApplyMeta(data);}catch(e){}
+      return;
+    }
+    var m=data._familyMeta;
+    function lsSet(k,v){if(v)try{localStorage.setItem(k,v);}catch(e){}}
+
+    /* ── Supabase settings (المفاتيح الصحيحة) ── */
+    if(m.sbUrl||m.sbAnonKey){
+      lsSet('ft_supabase_url_v1',    m.sbUrl);
+      lsSet('ft_supabase_anon_v1',   m.sbAnonKey);
+      lsSet('ft_supabase_sync_id_v1',m.sbSyncId||'family-sync');
+      lsSet('ft_supabase_bucket_v1', m.sbBucket||'family-tree');
+      lsSet('ft_supabase_key_v1',    m.keyHex);
+      lsSet('ft_cloud_key',          m.keyHex);
+      if(m.keyHex&&window.CLOUD_CONFIG)
+        try{window.CLOUD_CONFIG.KEY_HEX=m.keyHex;}catch(e){}
+      /* مسح الـ JWT cache حتى يحصل على session جديد */
+      try{localStorage.removeItem(FV_AUTH_KEY);}catch(e){}
+      /* مسح الـ hash لإجبار رفع فوري */
+      try{localStorage.removeItem(FV_HASH_KEY);}catch(e){}
+      /* إنشاء معرّف جهاز جديد — لا نأخذه من meta */
+      try{localStorage.removeItem('ft_family_device_id');}catch(e){}
+      log('[Import] Supabase settings applied — syncId:',m.sbSyncId||'—');
+    }
+
+    /* ── للتوافق مع النظام القديم إذا كان meta يحتوي Gist ── */
+    if(_origApplyMeta)try{_origApplyMeta(data);}catch(e){}
+  }
+
+  /* ── _isFamilyUploadConfigured ──────────────────────────────────────── */
+  function _isFamilyUploadConfigured(){
+    return fvReady();
+  }
+
+  /* ── رفع أولي بعد 10 ثوانٍ من تحميل الصفحة ─────────────────────────── */
+  window.addEventListener('load',function(){
+    setTimeout(function(){
+      if(fvReady()){log('رفع أولي…');_doSilentFamilyUpload();}
+      else log('Supabase غير مُعدَّة — سيُرفع بعد استيراد JSON');
+    },10000);
+  });
+
+  /* ── كشف على window ─────────────────────────────────────────────────── */
+  window.triggerFamilyUpload        = triggerFamilyUpload;
+  window._doSilentFamilyUpload      = _doSilentFamilyUpload;
+  window._isFamilyUploadConfigured  = _isFamilyUploadConfigured;
+  window._applyFamilyMetaIfNeeded   = _applyFamilyMetaIfNeeded;
+
+  log('Family Version Supabase Module v4 loaded ✓  device:',
+    (function(){try{return localStorage.getItem('ft_family_device_id')||'(جديد)';}catch(e){return'?';}}()));
+})();
+</script>
+
 </body>
 </html>
