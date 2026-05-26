@@ -8788,148 +8788,123 @@ function dismissInstallBanner(){
 }
 
 // ══════════════════════════════════════════════════════════
-//  زر "للأعلى" العائم + زر البحث (للجوال فقط)
+//  زر "للأعلى" العائم + زر إضافة سريع (للجوال)
 // ══════════════════════════════════════════════════════════
 (function(){
+  // أنشئ الزر العائم
   let fab=document.createElement('div');
   fab.id='mob-fab';
   fab.innerHTML=`
     <style>
-    #mob-fab{
-      position:fixed;
-      bottom:24px;
-      left:16px;
-      display:none;
-      flex-direction:column;
-      gap:10px;
+    #mob-fab {
+      position:fixed;bottom:24px;left:16px;
+      display:none;flex-direction:column;gap:10px;
       z-index:400;
-      opacity:0;
-      pointer-events:none;
-      transition:opacity .25s ease;
+      opacity:0;pointer-events:none;
+      transition:opacity .25s;
     }
-    body.mobile-mode #mob-fab{
-      display:flex;
-    }
-    #mob-fab.visible{
-      opacity:1;
-      pointer-events:auto;
-    }
-    .mob-fab-btn{
-      width:46px;
-      height:46px;
-      border-radius:50%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:20px;
-      cursor:pointer;
+    body.mobile-mode #mob-fab { display:flex; }
+    #mob-fab.visible { opacity:1;pointer-events:auto; }
+    .mob-fab-btn {
+      width:46px;height:46px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:20px;cursor:pointer;
       box-shadow:0 4px 16px rgba(0,0,0,.2);
-      border:none;
-      transition:transform .15s,box-shadow .15s;
+      border:none;transition:transform .15s,box-shadow .15s;
     }
-    .mob-fab-btn:active{
-      transform:scale(.92);
-    }
-    .mob-fab-top{
-      background:#fff;
-      color:#374151;
-      border:1px solid #e5e7eb;
-    }
-    [data-theme="dark"] .mob-fab-top{
-      background:#1f2937;
-      color:#f9fafb;
-      border-color:#374151;
-    }
-    .mob-fab-search{
-      background:#1e40af;
-      color:#fff;
-      font-size:18px;
-    }
+    .mob-fab-btn:active { transform:scale(.92); }
+    .mob-fab-top { background:#fff;color:#374151;border:1px solid #e5e7eb; }
+    [data-theme="dark"] .mob-fab-top { background:#1f2937;color:#f9fafb;border-color:#374151; }
+    .mob-fab-search { background:#1e40af;color:#fff; font-size:18px; }
     </style>
-
-    <button id="mob-fab-search-btn"
-      class="mob-fab-btn mob-fab-search"
-      onclick="openSearchPanel()"
-      title="بحث سريع">🔍</button>
-
-    <button class="mob-fab-btn mob-fab-top"
-      onclick="window._mobFabGoTopInstant()"
-      title="للأعلى">↑</button>
+    <button id="mob-fab-search-btn" class="mob-fab-btn mob-fab-search" onclick="openSearchPanel()" title="بحث سريع">🔍</button>
+    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo(0,0)" title="للأعلى">↑</button>
   `;
-
   document.body.appendChild(fab);
 
-  const TOP_THRESHOLD = 88;
-  const UP_THRESHOLD = 16;
+  let _autoHideTimer = null;
+  let _isMobileMode = document.body.classList.contains('mobile-mode');
+  let _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
-  let lastY = window.scrollY || document.documentElement.scrollTop || 0;
-
-  function isMobileMode(){
-    return document.body.classList.contains('mobile-mode');
+  function _clearAutoHideTimer() {
+    if (_autoHideTimer) {
+      clearTimeout(_autoHideTimer);
+      _autoHideTimer = null;
+    }
   }
 
-  function hideFab(){
+  function _hideFab() {
     fab.classList.remove('visible');
+    _clearAutoHideTimer();
   }
 
-  function showFab(){
-    if(!isMobileMode()) return;
+  function _showFab() {
+    if (!_isMobileMode) return;
+    fab.classList.add('visible');
+    _clearAutoHideTimer();
+    _autoHideTimer = setTimeout(() => {
+      if (document.body.classList.contains('mobile-mode')) {
+        fab.classList.remove('visible');
+      }
+    }, 2000);
+  }
 
-    const y = window.scrollY || document.documentElement.scrollTop || 0;
+  function _syncFabMode() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
-    if(y < TOP_THRESHOLD){
-      hideFab();
+    if (_isMobileMode) {
+      fab.style.display = 'flex';
+      _hideFab();
+    } else {
+      _hideFab();
+      fab.style.display = 'none';
+    }
+  }
+
+  function updateFabVisibility() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    if (!_isMobileMode) {
+      _hideFab();
       return;
     }
 
-    fab.classList.add('visible');
+    let currentY = window.scrollY || document.documentElement.scrollTop || 0;
+    let delta = currentY - _lastScrollY;
+    _lastScrollY = currentY;
+
+    if (currentY < 120) {
+      _hideFab();
+      return;
+    }
+
+    if (delta < -12) {
+      _showFab();
+      return;
+    }
+
+    if (delta > 12) {
+      _hideFab();
+    }
   }
 
-  window._mobFabGoTopInstant = function(){
-    try{
-      window.scrollTo(0,0);
-    }catch(e){}
+  // أظهر/أخفِ فقط وفق اتجاه التمرير في وضع الجوال
+  window.addEventListener('scroll', updateFabVisibility, { passive: true });
 
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+  // عند أي تفاعل لمس في الجوال نعيد التقييم من دون إظهار مبكر
+  document.addEventListener('touchend', () => {
+    if (!document.body.classList.contains('mobile-mode')) return;
+    setTimeout(updateFabVisibility, 0);
+  }, { passive: true });
 
-    hideFab();
+  // إعادة تقييم عند تبديل وضع الجوال
+  window._updateFabMobileMode = () => {
+    _syncFabMode();
   };
 
-  function handleScroll(){
-    if(!isMobileMode()){
-      hideFab();
-      lastY = window.scrollY || document.documentElement.scrollTop || 0;
-      return;
-    }
-
-    const currentY = window.scrollY || document.documentElement.scrollTop || 0;
-    const delta = currentY - lastY;
-
-    if(currentY <= TOP_THRESHOLD){
-      hideFab();
-      lastY = currentY;
-      return;
-    }
-
-    if(delta <= -UP_THRESHOLD){
-      showFab();
-    }else if(delta >= 6){
-      hideFab();
-    }
-
-    lastY = currentY;
-  }
-
-  function syncFabState(){
-    hideFab();
-    lastY = window.scrollY || document.documentElement.scrollTop || 0;
-  }
-
-  window.addEventListener('scroll', handleScroll, { passive:true });
-  window.addEventListener('resize', syncFabState);
-
-  setTimeout(syncFabState, 0);
+  // التحقق الأولي
+  _syncFabMode();
+  updateFabVisibility();
 })();
 
 // ══════════════════════════════════════════════════════════
