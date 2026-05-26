@@ -8868,32 +8868,12 @@ function dismissInstallBanner(){
     return document.body.classList.contains('mobile-mode');
   }
 
-  function hasOpenModal(){
-    return !!document.querySelector('.modal-overlay');
-  }
-
-  function isAllowedPanel(){
-    const activePanel = document.querySelector('.panel.active');
-    if(!activePanel) return false;
-
-    const id = activePanel.id || '';
-
-    return (
-      id.includes('tree') ||
-      id.includes('person') ||
-      id.includes('guide') ||
-      id.includes('help')
-    );
-  }
-
   function hideFab(){
     fab.classList.remove('visible');
   }
 
   function showFab(){
     if(!isMobileMode()) return;
-    if(hasOpenModal()) return;
-    if(!isAllowedPanel()) return;
 
     const y = window.scrollY || document.documentElement.scrollTop || 0;
 
@@ -8917,7 +8897,7 @@ function dismissInstallBanner(){
   };
 
   function handleScroll(){
-    if(!isMobileMode() || hasOpenModal() || !isAllowedPanel()){
+    if(!isMobileMode()){
       hideFab();
       lastY = window.scrollY || document.documentElement.scrollTop || 0;
       return;
@@ -8946,24 +8926,8 @@ function dismissInstallBanner(){
     lastY = window.scrollY || document.documentElement.scrollTop || 0;
   }
 
-  const observer = new MutationObserver(function(){
-    if(hasOpenModal() || !isAllowedPanel()){
-      hideFab();
-    }
-  });
-
-  observer.observe(document.body,{
-    childList:true,
-    subtree:true,
-    attributes:true,
-    attributeFilter:['class']
-  });
-
   window.addEventListener('scroll', handleScroll, { passive:true });
   window.addEventListener('resize', syncFabState);
-  document.addEventListener('click', function(){
-    setTimeout(handleScroll, 60);
-  });
 
   setTimeout(syncFabState, 0);
 })();
