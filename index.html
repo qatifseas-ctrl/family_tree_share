@@ -8818,92 +8818,87 @@ function dismissInstallBanner(){
     .mob-fab-search { background:#1e40af;color:#fff; font-size:18px; }
     </style>
     <button id="mob-fab-search-btn" class="mob-fab-btn mob-fab-search" onclick="openSearchPanel()" title="بحث سريع">🔍</button>
-    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo(0,0)" title="للأعلى">↑</button>
+    <button class="mob-fab-btn mob-fab-top" onclick="window._mobFabGoTopInstant()" title="للأعلى">↑</button>
   `;
   document.body.appendChild(fab);
 
-  let _autoHideTimer = null;
-  let _isMobileMode = document.body.classList.contains('mobile-mode');
-  let _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  const TOP_THRESHOLD = 88;
+  const UP_THRESHOLD = 14;
+  let lastY = window.scrollY || document.documentElement.scrollTop || 0;
 
-  function _clearAutoHideTimer() {
-    if (_autoHideTimer) {
-      clearTimeout(_autoHideTimer);
-      _autoHideTimer = null;
-    }
+  function isMobileMode(){
+    return document.body.classList.contains('mobile-mode');
   }
 
-  function _hideFab() {
+  function hasActiveOverlay(){
+    return !!document.querySelector(
+      '.modal-overlay,[role="dialog"],dialog[open],.modal-window,.popup,.popup-open,.dialog,.swal2-container,.tingle-modal--visible'
+    );
+  }
+
+  function hideFab(){
     fab.classList.remove('visible');
-    _clearAutoHideTimer();
   }
 
-  function _showFab() {
-    if (!_isMobileMode) return;
+  function showFab(){
+    if(!isMobileMode()) return;
+    if(hasActiveOverlay()) return;
+    if((window.scrollY || document.documentElement.scrollTop || 0) < TOP_THRESHOLD) return;
     fab.classList.add('visible');
-    _clearAutoHideTimer();
-    _autoHideTimer = setTimeout(() => {
-      if (document.body.classList.contains('mobile-mode')) {
-        fab.classList.remove('visible');
-      }
-    }, 2000);
   }
 
-  function _syncFabMode() {
-    _isMobileMode = document.body.classList.contains('mobile-mode');
-    _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  window._mobFabGoTopInstant = function(){
+    try{ window.scrollTo({top:0,behavior:'instant'}); }
+    catch(e){ window.scrollTo(0,0); }
 
-    if (_isMobileMode) {
-      fab.style.display = 'flex';
-      _hideFab();
-    } else {
-      _hideFab();
-      fab.style.display = 'none';
-    }
-  }
-
-  function updateFabVisibility() {
-    _isMobileMode = document.body.classList.contains('mobile-mode');
-    if (!_isMobileMode) {
-      _hideFab();
-      return;
-    }
-
-    let currentY = window.scrollY || document.documentElement.scrollTop || 0;
-    let delta = currentY - _lastScrollY;
-    _lastScrollY = currentY;
-
-    if (currentY < 120) {
-      _hideFab();
-      return;
-    }
-
-    if (delta < -12) {
-      _showFab();
-      return;
-    }
-
-    if (delta > 12) {
-      _hideFab();
-    }
-  }
-
-  // أظهر/أخفِ فقط وفق اتجاه التمرير في وضع الجوال
-  window.addEventListener('scroll', updateFabVisibility, { passive: true });
-
-  // عند أي تفاعل لمس في الجوال نعيد التقييم من دون إظهار مبكر
-  document.addEventListener('touchend', () => {
-    if (!document.body.classList.contains('mobile-mode')) return;
-    setTimeout(updateFabVisibility, 0);
-  }, { passive: true });
-
-  // إعادة تقييم عند تبديل وضع الجوال
-  window._updateFabMobileMode = () => {
-    _syncFabMode();
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    hideFab();
   };
 
-  // التحقق الأولي
-  _syncFabMode();
+  function updateFabVisibility(){
+    if(!isMobileMode() || hasActiveOverlay()){
+      hideFab();
+      lastY = window.scrollY || document.documentElement.scrollTop || 0;
+      return;
+    }
+
+    const currentY = window.scrollY || document.documentElement.scrollTop || 0;
+    const delta = currentY - lastY;
+
+    if(currentY < TOP_THRESHOLD){
+      hideFab();
+      lastY = currentY;
+      return;
+    }
+
+    if(delta < -UP_THRESHOLD){
+      showFab();
+    }else if(delta > UP_THRESHOLD){
+      hideFab();
+    }
+
+    lastY = currentY;
+  }
+
+  window.addEventListener('scroll', updateFabVisibility, { passive:true });
+
+  document.addEventListener('touchstart', function(){
+    lastY = window.scrollY || document.documentElement.scrollTop || 0;
+  }, { passive:true });
+
+  document.addEventListener('click', function(){
+    if(hasActiveOverlay()){
+      hideFab();
+    }
+  }, { passive:true });
+
+  window._updateFabMobileMode = function(){
+    lastY = window.scrollY || document.documentElement.scrollTop || 0;
+    updateFabVisibility();
+  };
+
+  hideFab();
   updateFabVisibility();
 })();
 
