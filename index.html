@@ -8818,88 +8818,69 @@ function dismissInstallBanner(){
     .mob-fab-search { background:#1e40af;color:#fff; font-size:18px; }
     </style>
     <button id="mob-fab-search-btn" class="mob-fab-btn mob-fab-search" onclick="openSearchPanel()" title="بحث سريع">🔍</button>
-    <button class="mob-fab-btn mob-fab-top" onclick="window._mobFabGoTopInstant()" title="للأعلى">↑</button>
+    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo(0,0)" title="للأعلى">↑</button>
   `;
   document.body.appendChild(fab);
 
-  const TOP_THRESHOLD = 88;
-  const UP_THRESHOLD = 14;
-  let lastY = window.scrollY || document.documentElement.scrollTop || 0;
+  let _isMobileMode = document.body.classList.contains('mobile-mode');
+  let _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
-  function isMobileMode(){
-    return document.body.classList.contains('mobile-mode');
-  }
-
-  function hasActiveOverlay(){
-    return !!document.querySelector(
-      '.modal-overlay,[role="dialog"],dialog[open],.modal-window,.popup,.popup-open,.dialog,.swal2-container,.tingle-modal--visible'
-    );
-  }
-
-  function hideFab(){
+  function _hideFab() {
     fab.classList.remove('visible');
   }
 
-  function showFab(){
-    if(!isMobileMode()) return;
-    if(hasActiveOverlay()) return;
-    if((window.scrollY || document.documentElement.scrollTop || 0) < TOP_THRESHOLD) return;
+  function _showFab() {
+    if (!_isMobileMode) return;
     fab.classList.add('visible');
   }
 
-  window._mobFabGoTopInstant = function(){
-    try{ window.scrollTo({top:0,behavior:'instant'}); }
-    catch(e){ window.scrollTo(0,0); }
+  function _syncFabMode() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
+    _lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    hideFab();
-  };
-
-  function updateFabVisibility(){
-    if(!isMobileMode() || hasActiveOverlay()){
-      hideFab();
-      lastY = window.scrollY || document.documentElement.scrollTop || 0;
-      return;
+    if (_isMobileMode) {
+      fab.style.display = 'flex';
+      _hideFab();
+    } else {
+      fab.style.display = 'none';
+      _hideFab();
     }
-
-    const currentY = window.scrollY || document.documentElement.scrollTop || 0;
-    const delta = currentY - lastY;
-
-    if(currentY < TOP_THRESHOLD){
-      hideFab();
-      lastY = currentY;
-      return;
-    }
-
-    if(delta < -UP_THRESHOLD){
-      showFab();
-    }else if(delta > UP_THRESHOLD){
-      hideFab();
-    }
-
-    lastY = currentY;
   }
 
-  window.addEventListener('scroll', updateFabVisibility, { passive:true });
+  function updateFabVisibility() {
+    _isMobileMode = document.body.classList.contains('mobile-mode');
 
-  document.addEventListener('touchstart', function(){
-    lastY = window.scrollY || document.documentElement.scrollTop || 0;
-  }, { passive:true });
-
-  document.addEventListener('click', function(){
-    if(hasActiveOverlay()){
-      hideFab();
+    if (!_isMobileMode) {
+      _hideFab();
+      return;
     }
-  }, { passive:true });
 
-  window._updateFabMobileMode = function(){
-    lastY = window.scrollY || document.documentElement.scrollTop || 0;
-    updateFabVisibility();
+    let currentY = window.scrollY || document.documentElement.scrollTop || 0;
+    let delta = currentY - _lastScrollY;
+
+    if (currentY <= 120) {
+      _hideFab();
+      _lastScrollY = currentY;
+      return;
+    }
+
+    if (delta <= -14) {
+      _showFab();
+    } else if (delta >= 10) {
+      _hideFab();
+    }
+
+    _lastScrollY = currentY;
+  }
+
+  window.addEventListener('scroll', updateFabVisibility, { passive: true });
+  window.addEventListener('resize', _syncFabMode, { passive: true });
+
+  window._updateFabMobileMode = () => {
+    _syncFabMode();
   };
 
-  hideFab();
-  updateFabVisibility();
+  _syncFabMode();
 })();
 
 // ══════════════════════════════════════════════════════════
@@ -8941,6 +8922,11 @@ function openSearchPanel(){
     ? people.filter(p=>matchesFullName(p,lastQ)).sort((a,b)=>scoreMatch(b,lastQ)-scoreMatch(a,lastQ))
     : [];
   openMobSearchSheet(results, lastQ);
+  
+  // ── حفظ حالة المجموعة المختارة قبل إعادة تعيينها ──
+  // عند الضغط على الشريط الأزرق، احفظ المجموعة المختارة الحالية
+  _mssSavedActiveGroup = _mssActiveGroup;
+  
   // بعد الرسم: ضع البحث في حقل المدخلات وضع التركيز
   requestAnimationFrame(()=>{
     let inp = document.getElementById('mss-input');
