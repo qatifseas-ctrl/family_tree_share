@@ -3170,16 +3170,9 @@ function searchNavigateTo(id){
     let _alreadyCorrectSF=currentSideFamily&&currentSideFamily.sfId===_targetP.sideFamilyId;
     let _alreadyCorrect=currentFamilyFilter&&currentFamilyFilter.rootId===_tRoot.id;
     if(_isSFMember){
-      if(!_alreadyCorrectSF){
-        let sf=getSideFamily(_targetP.sideFamilyId);
-        if(sf){
-          let _fromLabel=currentSideFamily?currentSideFamily.label:currentFamilyFilter?currentFamilyFilter.label:
-            (getRoots(false).length>0?'عائلة '+getRoots(false)[0].name:'الشجرة الرئيسية');
-          navStack.push({label:_fromLabel,filter:currentFamilyFilter?JSON.parse(JSON.stringify(currentFamilyFilter)):null,sideFamily:currentSideFamily?JSON.parse(JSON.stringify(currentSideFamily)):null,scrollY:window.scrollY});
-          currentFamilyFilter=null;
-          currentSideFamily={sfId:sf.id,label:sf.title};
-        }
-      }
+      navigateToSideFamily(_targetP.sideFamilyId,getSideFamily(_targetP.sideFamilyId)?.title||'عائلة جانبية',id);
+      _searchActiveId=id;
+      return;
     } else if(!_alreadyCorrect){
       if(_isMainTree){
         navStack=[];
@@ -3258,7 +3251,7 @@ function exportData(){
   setTimeout(function(){
     try{
       // ── 1. Build data payload ──
-      var payload=JSON.stringify({people:people,relPairs:relPairs,nextId:nextId,myPersonId:myPersonId||null});
+      var payload=JSON.stringify({people:people,relPairs:relPairs,nextId:nextId,myPersonId:myPersonId||null,sideFamilies:sideFamilies});
       var bytes=new TextEncoder().encode(payload);
       var bin='';bytes.forEach(function(b){bin+=String.fromCharCode(b);});
       var b64=btoa(bin);
@@ -3402,7 +3395,7 @@ function _buildFamilyExportOption(){
 
 function doExportJSON(withPhotos){
   closeModal();
-  let data=JSON.parse(JSON.stringify({people,relPairs,nextId}));
+  let data=JSON.parse(JSON.stringify({people,relPairs,nextId,sideFamilies:sideFamilies}));
   let photoCount=data.people.filter(p=>p.photo).length;
   if(!withPhotos) data.people.forEach(p=>{if(p.photo)delete p.photo;});
   let payload=JSON.stringify(data,null,2);
@@ -3426,7 +3419,7 @@ function doExportJSONFamily(withPhotos){
   var fuPat=FAMILY_UPLOAD_CONFIG.GITHUB_PAT||localStorage.getItem('ft_fupload_pat')||'';
   var fuKey=FAMILY_UPLOAD_CONFIG.KEY_HEX||localStorage.getItem('ft_fupload_key')||CLOUD_CONFIG.KEY_HEX||localStorage.getItem('ft_cloud_key')||'';
 
-  var data=JSON.parse(JSON.stringify({people,relPairs,nextId}));
+  var data=JSON.parse(JSON.stringify({people,relPairs,nextId,sideFamilies:sideFamilies}));
   var photoCount=data.people.filter(p=>p.photo).length;
   if(!withPhotos) data.people.forEach(function(p){if(p.photo)delete p.photo;});
 
@@ -6410,7 +6403,7 @@ async function _doSilentFamilyUpload(){
       return;
     }
     // بناء payload (بدون صور)
-    let data=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null,uploadedAt:new Date().toISOString()}));
+    let data=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null,sideFamilies:sideFamilies,uploadedAt:new Date().toISOString()}));
     data.people.forEach(p=>{if(p.photo)delete p.photo;});
     let plain=JSON.stringify(data);
     // AES-256-GCM دائماً — بدون بديل
@@ -6780,7 +6773,7 @@ function _familyExtractPeoplePayload(node, depth){
   if(!node || typeof node!=='object' || depth>4) return null;
   if(Array.isArray(node.people)) return node;
   if(Array.isArray(node.data) && node.data.every(x=>x && typeof x==='object' && ('id' in x || 'name' in x || 'gender' in x))) {
-    return {people: node.data, relPairs: Array.isArray(node.relPairs)?node.relPairs:(Array.isArray(node.relationships)?node.relationships:[]), nextId: node.nextId, myPersonId: node.myPersonId, uploadedAt: node.uploadedAt};
+    return {people: node.data, relPairs: Array.isArray(node.relPairs)?node.relPairs:(Array.isArray(node.relationships)?node.relationships:[]), nextId: node.nextId, myPersonId: node.myPersonId, sideFamilies: node.sideFamilies||[], uploadedAt: node.uploadedAt};
   }
   const nestedKeys=['data','payload','familyData','tree','update','body','content'];
   for(const k of nestedKeys){
@@ -6815,7 +6808,7 @@ function _familyNormalizeUpdateData(payload){
     return obj;
   }
   if(Array.isArray(obj.data)){
-    return {people:obj.data, relPairs:Array.isArray(obj.relPairs)?obj.relPairs:[], nextId:obj.nextId||1, myPersonId:obj.myPersonId||null, uploadedAt:obj.uploadedAt||''};
+    return {people:obj.data, relPairs:Array.isArray(obj.relPairs)?obj.relPairs:[], nextId:obj.nextId||1, myPersonId:obj.myPersonId||null, sideFamilies:obj.sideFamilies||[], uploadedAt:obj.uploadedAt||''};
   }
   return null;
 }
@@ -7429,7 +7422,7 @@ async function cloudSave(){
   _showCloudToast(`🔄 جارٍ التشفير والرفع${photoCount?' ('+photoCount+' صورة، '+sizeLabel+')':''}...`,'syncing',0);
   try{
     // ── ملف البيانات بدون صور (يبقى صغيراً < 1MB دائماً) ──
-    let dataNoPhotos=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null}));
+    let dataNoPhotos=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null,sideFamilies:sideFamilies}));
     dataNoPhotos.people.forEach(p=>{if(p.photo)delete p.photo;});
     let encData=await cloudEncrypt(JSON.stringify(dataNoPhotos));
 
@@ -7484,7 +7477,7 @@ async function cloudSave(){
   _updateCloudBtn('syncing');
   try{
     // ── ١. ملف البيانات الرئيسية بدون صور ──
-    let dataNoPhotos=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null}));
+    let dataNoPhotos=JSON.parse(JSON.stringify({people,relPairs,nextId,myPersonId:myPersonId||null,sideFamilies:sideFamilies}));
     dataNoPhotos.people.forEach(p=>{if(p.photo)delete p.photo;});
     let encData=await cloudEncrypt(JSON.stringify(dataNoPhotos));
     let filesObj={[CLOUD_CONFIG.GIST_FILE]:{content:encData}};
@@ -8583,7 +8576,7 @@ let _fsaEnabled=false;
 
 // بناء HTML الكامل مع البيانات مضمّنة
 function _buildSaveHTML(){
-  var payload=JSON.stringify({people:people,relPairs:relPairs,nextId:nextId,myPersonId:myPersonId||null});
+  var payload=JSON.stringify({people:people,relPairs:relPairs,nextId:nextId,myPersonId:myPersonId||null,sideFamilies:sideFamilies});
   var bytes=new TextEncoder().encode(payload);
   var bin='';bytes.forEach(function(b){bin+=String.fromCharCode(b);});
   var b64=btoa(bin);
