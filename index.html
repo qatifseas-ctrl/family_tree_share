@@ -7344,7 +7344,7 @@ function mergeFamilyUpdate(){
 function replaceFamilyUpdate(){
   let data=window._familyUpdateData;if(!data)return;
   if(!confirm('⚠️ استبدال كامل: سيُحذف كل شيء في الشجرة الحالية ويُستبدل ببيانات العائلة.\nهذا لا يمكن التراجع عنه — متأكد؟'))return;
-  people=data.people;nextId=data.nextId||1;relPairs=data.relPairs||[];
+  people=data.people;nextId=data.nextId||1;relPairs=data.relPairs||[];sideFamilies=data.sideFamilies||[];_rebuildSfNextId();
   if(data.myPersonId){myPersonId=parseInt(data.myPersonId);saveMyPerson();}
   expanded={};people.forEach(p=>{expanded[p.id]=false;});
   migrateExternalSpouses();if(people.length)expanded[people[0].id]=true;
@@ -8364,6 +8364,7 @@ async function initCloud(){
         let localCount=people.length;
         if(localCount===0){
           people=cloudData.people;nextId=cloudData.nextId||1;relPairs=cloudData.relPairs||[];
+          sideFamilies=cloudData.sideFamilies||[];_rebuildSfNextId();
           if(cloudData.myPersonId){myPersonId=parseInt(cloudData.myPersonId);saveMyPerson();}
           expanded={};people.forEach(p=>{expanded[p.id]=false;});
           migrateExternalSpouses();
@@ -8831,6 +8832,7 @@ deletePerson=function(id){
             if(d.myPersonId){myPersonId=parseInt(d.myPersonId);saveMyPerson();}
             people.forEach(function(p){expanded[p.id]=false;});
             migrateExternalSpouses();
+            _markDeviceInit();
             _idbSave({people:people,relPairs:relPairs,nextId:nextId,sideFamilies:sideFamilies}).catch(function(){});
             _lsSave({people:people,relPairs:relPairs,nextId:nextId,sideFamilies:sideFamilies});
             dataLoaded=true;
@@ -8844,7 +8846,7 @@ deletePerson=function(id){
   // 4. لا يوجد بيانات — نسخة العائلة: شاشة ترحيب / نسخة المالك: بيانات نموذجية
   if(!dataLoaded){
     if(IS_FAMILY_COPY){
-      people=[];relPairs=[];nextId=1;
+      people=[];relPairs=[];nextId=1;sideFamilies=[];
       console.log('[Init] Family copy — no data, showing welcome screen');
       setTimeout(_showFamilyWelcome, 700);
     } else {
@@ -9913,7 +9915,8 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
       var sig=JSON.stringify({
         people:p,
         relPairs:Array.isArray(relPairs)?relPairs:[],
-        nextId:nextId||0
+        nextId:nextId||0,
+        sideFamilies:Array.isArray(sideFamilies)?sideFamilies:[]
       });
       return fvSHA256(sig);
     }catch(e){return Promise.resolve('');}
@@ -9976,6 +9979,7 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
         relPairs:Array.isArray(relPairs)?relPairs:[],
         nextId:nextId||1,
         myPersonId:(typeof myPersonId!=='undefined'?myPersonId:null),
+        sideFamilies:Array.isArray(sideFamilies)?sideFamilies:[],
         uploadedAt:new Date().toISOString(),
         deviceId:fvDevId(),
         deviceName:fvDevName()
@@ -10073,36 +10077,22 @@ document.addEventListener('DOMContentLoaded',function(){setTimeout(_refreshMerge
   window._doSilentFamilyUpload      = _doSilentFamilyUpload;
   window._isFamilyUploadConfigured  = _isFamilyUploadConfigured;
   window._applyFamilyMetaIfNeeded   = _applyFamilyMetaIfNeeded;
-  window.navigateToSideFamily       = window.navigateToSideFamily||navigateToSideFamily||null;
+  // ── إدارة العائلات الجانبية (نسخة العائلة) ──
+  function manageSideFamilies(){
+    var list=sideFamilies&&sideFamilies.length?sideFamilies.map(function(sf){
+      var members=people.filter(function(p){return p.sideFamilyId===sf.id;});
+      var typeLabel={maternal:'فرع أمومي 🌸',paternal:'فرع أبوي 🌿',linked:'عائلة مرتبطة 🔗'}[sf.relationType]||'مرتبطة';
+      return '<div style="padding:12px;border:1px solid var(--card-border);border-radius:10px;background:var(--card-bg);margin-bottom:8px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:14px;font-weight:700;color:#5b21b6;flex:1">🌿 '+sf.title+'</span><span style="font-size:10px;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:5px;padding:1px 7px">'+typeLabel+'</span><span style="font-size:11px;color:var(--text2)">'+members.length+' فرد</span></div><div style="margin-top:8px;"><button class="btn" style="font-size:11px;padding:3px 10px;background:#ede9fe;border-color:#8b5cf6;color:#5b21b6" onclick="navigateToSideFamily(''+sf.id+'',''+sf.title.replace(/'/g,"\'")+'');closeModal()">🌿 فتح الشجرة</button></div></div>';
+    }).join(''):'<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">لا توجد عائلات جانبية.</div>';
+    var html='<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px;"><h3>🌿 العائلات الجانبية المرتبطة</h3><div style="max-height:55vh;overflow-y:auto;">'+list+'</div><div class="modal-footer"><button class="btn" onclick="closeModal()">إغلاق</button></div></div></div>';
+    document.getElementById('modalContainer').innerHTML=html;
+  }
+  window.manageSideFamilies             = manageSideFamilies;
+  window.navigateToSideFamily           = navigateToSideFamily;
 
   log('Family Version Supabase Module v4 loaded ✓  device:',
     (function(){try{return localStorage.getItem('ft_family_device_id')||'(جديد)';}catch(e){return'?';}}()));
 })();
-</script>
-<script>
-// ── العائلات الجانبية: إدارة وعرض (نسخة العائلة - قراءة فقط) ──
-function manageSideFamilies(){
-  var list=sideFamilies&&sideFamilies.length?sideFamilies.map(function(sf){
-    var members=people.filter(function(p){return p.sideFamilyId===sf.id;});
-    var typeLabel={maternal:'فرع أمومي 🌸',paternal:'فرع أبوي 🌿',linked:'عائلة مرتبطة 🔗'}[sf.relationType]||'مرتبطة';
-    return '<div style="padding:12px;border:1px solid var(--card-border);border-radius:10px;background:var(--card-bg);margin-bottom:8px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
-      '<span style="font-size:14px;font-weight:700;color:#5b21b6;flex:1">🌿 '+sf.title+'</span>'+
-      '<span style="font-size:10px;color:#7c3aed;background:#ede9fe;border:1px solid #c4b5fd;border-radius:5px;padding:1px 7px">'+typeLabel+'</span>'+
-      '<span style="font-size:11px;color:var(--text2)">'+members.length+' فرد</span>'+
-      '</div><div style="margin-top:8px;">'+
-      '<button class="btn" style="font-size:11px;padding:3px 10px;background:#ede9fe;border-color:#8b5cf6;color:#5b21b6" onclick="navigateToSideFamily(''+sf.id+'',''+sf.title.replace(/'/g,"\'")+''  );closeModal()">🌿 فتح الشجرة</button>'+
-      '</div></div>';
-  }).join(''):'<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">لا توجد عائلات جانبية.</div>';
-  var html='<div class="modal-overlay" onclick="if(event.target===this)closeModal()">'+
-    '<div class="modal" style="max-width:480px;">'+
-    '<h3>🌿 العائلات الجانبية المرتبطة</h3>'+
-    '<div style="max-height:55vh;overflow-y:auto;">'+list+'</div>'+
-    '<div class="modal-footer"><button class="btn" onclick="closeModal()">إغلاق</button></div>'+
-    '</div></div>';
-  document.getElementById('modalContainer').innerHTML=html;
-}
-</script>
 
 </body>
 </html>
