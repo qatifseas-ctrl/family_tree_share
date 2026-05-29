@@ -8788,22 +8788,29 @@ function dismissInstallBanner(){
 }
 
 // ══════════════════════════════════════════════════════════
-//  زر "للأعلى" العائم + زر إضافة سريع (للجوال)
-// ══════════════════════════════════════════════════════════
+
 (function(){
-  // أنشئ الزر العائم
+  if(window._mobFabControllerInitialized) return;
+  window._mobFabControllerInitialized = true;
+
   let fab=document.createElement('div');
   fab.id='mob-fab';
   fab.innerHTML=`
     <style>
-    #mob-fab {
-      position:fixed;bottom:24px;left:16px;
-      display:flex;flex-direction:column;gap:10px;
+    body:not(.mobile-mode) #mob-fab { display:none!important; }
+    body.mobile-mode #mob-fab {
+      position:fixed;
+      bottom:24px;
+      left:16px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
       z-index:400;
-      opacity:0;pointer-events:none;
-      transition:opacity .25s;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .2s ease;
     }
-    #mob-fab.visible { opacity:1;pointer-events:auto; }
+    body.mobile-mode #mob-fab.visible { opacity:1;pointer-events:auto; }
     .mob-fab-btn {
       width:46px;height:46px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;
@@ -8817,55 +8824,136 @@ function dismissInstallBanner(){
     .mob-fab-search { background:#1e40af;color:#fff; font-size:18px; }
     </style>
     <button id="mob-fab-search-btn" class="mob-fab-btn mob-fab-search" onclick="openSearchPanel()" title="بحث سريع">🔍</button>
-    <button class="mob-fab-btn mob-fab-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="للأعلى">↑</button>
+    <button class="mob-fab-btn mob-fab-top" onclick="window._mobFabGoTopInstant()" title="للأعلى">↑</button>
   `;
   document.body.appendChild(fab);
 
-  let _autoHideTimer = null;
-  let _isMobileMode = document.body.classList.contains('mobile-mode');
+  const TOP_THRESHOLD = 88;
+  const UP_THRESHOLD = 12;
+  let lastY = window.scrollY || 0;
+  let syncPending = false;
 
-  function updateFabVisibility() {
-    _isMobileMode = document.body.classList.contains('mobile-mode');
-    
-    if (_isMobileMode) {
-      // وضع الجوال: إظهار عند التمرير أو الحركة، إخفاء تلقائي بعد 2 ثانية
-      if (window.scrollY > 200) {
-        fab.classList.add('visible');
-        // إعادة تعيين مؤقت الإخفاء التلقائي
-        clearTimeout(_autoHideTimer);
-        _autoHideTimer = setTimeout(() => {
-          fab.classList.remove('visible');
-        }, 2000);
+  function isMobileMode(){
+    return document.body.classList.contains('mobile-mode');
+  }
+
+  function isVisibleElement(el){
+    if(!el) return false;
+    try{
+      const st = window.getComputedStyle(el);
+      if(!st || st.display==='none' || st.visibility==='hidden' || st.opacity==='0') return false;
+    }catch(e){}
+    if(el.getClientRects && el.getClientRects().length===0) return false;
+    return true;
+  }
+
+  function hasVisibleBlockingUI(){
+    const modalContainer = document.getElementById('modalContainer');
+    if(modalContainer){
+      if(modalContainer.children && modalContainer.children.length>0) return true;
+      if((modalContainer.innerHTML||'').trim()) return true;
+    }
+
+    const selectors = [
+      '#mss-sheet.open',
+      '#mob-action-sheet.open',
+      '#mss-overlay',
+      '#mob-action-sheet-overlay',
+      '.modal-overlay',
+      '.modal',
+      '[role="dialog"]',
+      '[aria-modal="true"]',
+      '.popup',
+      '.dialog',
+      '[data-popup]',
+      '[data-dialog]'
+    ];
+
+    for(const selector of selectors){
+      const nodes = document.querySelectorAll(selector);
+      for(const node of nodes){
+        if(isVisibleElement(node)) return true;
       }
-    } else {
-      // وضع الديسكتوب: ثابت دائماً
+    }
+
+    return false;
+  }
+
+  function hideFab(){
+    fab.classList.remove('visible');
+  }
+
+  function showFab(){
+    if(isMobileMode() && !hasVisibleBlockingUI()){
       fab.classList.add('visible');
-      clearTimeout(_autoHideTimer);
     }
   }
 
-  // أظهر الزر عند التمرير والحركة (مع مراعاة وضع الجوال)
-  window.addEventListener('scroll', updateFabVisibility, { passive: true });
-  
-  // إظهار الزر عند أي تفاعل في الشجرة (حركة الماوس أو اللمس)
-  document.addEventListener('mousemove', () => {
-    if (_isMobileMode) {
-      fab.classList.add('visible');
-      clearTimeout(_autoHideTimer);
-      _autoHideTimer = setTimeout(() => {
-        fab.classList.remove('visible');
-      }, 2000);
-    }
-  }, { passive: true });
+  function syncFabState(){
+    const y = window.scrollY || 0;
 
-  // إعادة تقييم عند تبديل وضع الجوال
-  window._updateFabMobileMode = () => {
-    updateFabVisibility();
+    if(!isMobileMode() || hasVisibleBlockingUI()){
+      hideFab();
+      lastY = y;
+      return;
+    }
+
+    if(y <= TOP_THRESHOLD){
+      hideFab();
+      lastY = y;
+      return;
+    }
+
+    const dy = y - lastY;
+
+    if(dy < -UP_THRESHOLD){
+      showFab();
+    }else if(dy > 0){
+      hideFab();
+    }
+
+    lastY = y;
+  }
+
+  function requestSync(){
+    if(syncPending) return;
+    syncPending = true;
+    requestAnimationFrame(function(){
+      syncPending = false;
+      syncFabState();
+    });
+  }
+
+  window._mobFabGoTopInstant = function(){
+    try{ window.scrollTo(0,0); }catch(e){ window.scrollTo({top:0,behavior:'auto'}); }
+    try{ document.documentElement.scrollTop = 0; }catch(e){}
+    try{ document.body.scrollTop = 0; }catch(e){}
+    lastY = 0;
+    hideFab();
   };
 
-  // التحقق الأولي
-  updateFabVisibility();
+  window._updateFabMobileMode = requestSync;
+
+  window.addEventListener('scroll', syncFabState, { passive:true });
+  document.addEventListener('touchstart', function(){
+    lastY = window.scrollY || 0;
+  }, { passive:true });
+  window.addEventListener('resize', requestSync, { passive:true });
+  document.addEventListener('click', requestSync, true);
+
+  try{
+    const observer = new MutationObserver(requestSync);
+    observer.observe(document.body, {
+      subtree:true,
+      childList:true,
+      attributes:true,
+      attributeFilter:['class','style','hidden','aria-hidden','open']
+    });
+  }catch(e){}
+
+  requestSync();
 })();
+
 
 // ══════════════════════════════════════════════════════════
 //  مفاتيح حفظ البحث واستعادته
