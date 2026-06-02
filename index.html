@@ -1351,6 +1351,301 @@ let currentFamilyFilter=null; // null=show all, {rootId, label}=filter to one fa
 function uid(){return nextId++;}
 function crescent(c){return `<svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;display:inline-block"><path d="M7 1.5A5.5 5.5 0 1 0 12.5 7 5.508 5.508 0 0 1 7 1.5z" fill="${c||'#2e7d32'}"/></svg>`;}
 
+function _familyPad2(n){
+  return String(n).padStart(2,'0');
+}
+
+const _FAMILY_HIJRI_MONTHS = ['محرم','صفر','ربيع الأول','ربيع الثاني','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'];
+
+function _familyCloneDateValue(v){
+  return v===undefined||v===null ? v : String(v).trim();
+}
+
+function _familyParseIsoDate(v){
+  v=_familyCloneDateValue(v);
+  if(!v)return null;
+  var m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m)return null;
+  return {year:parseInt(m[1],10),month:parseInt(m[2],10),day:parseInt(m[3],10)};
+}
+
+function _familyParseHijriInput(v){
+  v=_familyCloneDateValue(v);
+  if(!v)return null;
+  var m=v.match(/^(\d{1,2})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{4})$/);
+  if(m){
+    return {day:parseInt(m[1],10),month:parseInt(m[2],10),year:parseInt(m[3],10)};
+  }
+  m=v.match(/^(\d{4})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{1,2})$/);
+  if(m){
+    return {year:parseInt(m[1],10),month:parseInt(m[2],10),day:parseInt(m[3],10)};
+  }
+  return null;
+}
+
+function _familyPartsToIso(parts){
+  if(!parts||!parts.year||!parts.month||!parts.day)return '';
+  return parts.year+'-'+_familyPad2(parts.month)+'-'+_familyPad2(parts.day);
+}
+
+function _familyGregorianToJdn(year, month, day){
+  year=parseInt(year,10); month=parseInt(month,10); day=parseInt(day,10);
+  if(month<=2){
+    year=year-1;
+    month=month+12;
+  }
+  var A=Math.floor(year/100);
+  var B=2-A+Math.floor(A/4);
+  return Math.floor(365.25*(year+4716))
+    + Math.floor(30.6001*(month+1))
+    + day + B - 1524;
+}
+
+function _familyJdnToGregorian(JD){
+  JD=parseInt(JD,10);
+  var a=JD+32044;
+  var b=Math.floor((4*a+3)/146097);
+  var c=a-Math.floor(146097*b/4);
+  var d=Math.floor((4*c+3)/1461);
+  var e=c-Math.floor(1461*d/4);
+  var m=Math.floor((5*e+2)/153);
+  var day=e-Math.floor((153*m+2)/5)+1;
+  var month=m+3-12*Math.floor(m/10);
+  var year=100*b+d-4800+Math.floor(m/10);
+  return {year:year,month:month,day:day};
+}
+
+function _familyGregorianToHijri(year, month, day){
+  var JD=_familyGregorianToJdn(year, month, day);
+  var l=JD-1948440+10632;
+  var n=Math.floor((l-1)/10631);
+  l=l-10631*n+354;
+  var j=Math.floor((10985-l)/5316)*Math.floor((50*l)/17719)-Math.floor(l/5670)*Math.floor((43*l)/15238);
+  l=l-Math.floor((30-j)/15)*Math.floor((17719*j)/50)-Math.floor(j/16)*Math.floor((15238*j)/43)+29;
+  var month2=Math.floor((24*l)/709);
+  var day2=l-Math.floor((709*month2)/24);
+  var year2=30*n+j-30;
+  return {year:year2,month:month2,day:day2};
+}
+
+function _familyHijriToJdn(year, month, day){
+  year=parseInt(year,10); month=parseInt(month,10); day=parseInt(day,10);
+  return day
+    + Math.floor((29.5*(month-1)))
+    + (year-1)*354
+    + Math.floor((3+11*year)/30)
+    + 1948440;
+}
+
+function _familyJdnToHijri(JD){
+  JD=parseInt(JD,10);
+  var l=JD-1948440+10632;
+  var n=Math.floor((l-1)/10631);
+  l=l-10631*n+354;
+  var j=Math.floor((10985-l)/5316)*Math.floor((50*l)/17719)-Math.floor(l/5670)*Math.floor((43*l)/15238);
+  l=l-Math.floor((30-j)/15)*Math.floor((17719*j)/50)-Math.floor(j/16)*Math.floor((15238*j)/43)+29;
+  var month=Math.floor((24*l)/709);
+  var day=l-Math.floor((709*month)/24);
+  var year=30*n+j-30;
+  return {year:year,month:month,day:day};
+}
+
+function _familyIsoToHijriIso(iso){
+  var g=_familyParseIsoDate(iso);
+  if(!g)return '';
+  var h=_familyGregorianToHijri(g.year,g.month,g.day);
+  return _familyPartsToIso(h);
+}
+
+function _familyHijriIsoToGregorianIso(iso){
+  var h=_familyParseIsoDate(iso);
+  if(!h)return '';
+  var jd=_familyHijriToJdn(h.year,h.month,h.day);
+  return _familyPartsToIso(_familyJdnToGregorian(jd));
+}
+
+function _familyFormatGregorianIso(iso){
+  var g=_familyParseIsoDate(iso);
+  if(!g)return '';
+  return _familyPad2(g.day)+'-'+_familyPad2(g.month)+'-'+g.year;
+}
+
+function _familyFormatHijriIso(iso){
+  var h=_familyParseIsoDate(iso);
+  if(!h)return '';
+  return _familyPad2(h.day)+' '+(_FAMILY_HIJRI_MONTHS[h.month-1]||h.month)+' '+h.year+'هـ';
+}
+
+function _familyFormatHijriInput(iso){
+  var h=_familyParseIsoDate(iso);
+  if(!h)return '';
+  return _familyPad2(h.day)+'-'+_familyPad2(h.month)+'-'+h.year;
+}
+
+function _familyFormatGregorianYear(iso){
+  var g=_familyParseIsoDate(iso);
+  return g ? String(g.year) : '';
+}
+
+function _familyNormalizeDateBundle(obj, base){
+  if(!obj||typeof obj!=='object')return obj;
+  base=base||'birth';
+
+  var typeKey=base+'DateType';
+  var gKey=base+'Gregorian';
+  var hKey=base+'Hijri';
+  var legacyKey=base==='birth'?'dob':'dod';
+
+  var g=_familyCloneDateValue(obj[gKey]||obj[legacyKey]||'');
+  var h=_familyCloneDateValue(obj[hKey]||'');
+  var type=_familyCloneDateValue(obj[typeKey]||'').toLowerCase();
+
+  if(g && !/^\d{4}-\d{2}-\d{2}$/.test(g)) g=_familyPartsToIso(_familyParseIsoDate(g) || {});
+  if(h && !/^\d{4}-\d{2}-\d{2}$/.test(h)) h=_familyPartsToIso(_familyParseHijriInput(h) || _familyParseIsoDate(h) || {});
+
+  var gParts=_familyParseIsoDate(g);
+  var hParts=_familyParseIsoDate(h);
+
+  if(!gParts && hParts){
+    g=_familyHijriIsoToGregorianIso(h);
+    gParts=_familyParseIsoDate(g);
+  }
+  if(!hParts && gParts){
+    h=_familyIsoToHijriIso(g);
+    hParts=_familyParseIsoDate(h);
+  }
+
+  if(type!=='gregorian' && type!=='hijri'){
+    type=hParts && !gParts ? 'hijri' : 'gregorian';
+  }
+
+  obj[typeKey]=type;
+  obj[gKey]=gParts ? _familyPartsToIso(gParts) : (g || '');
+  obj[hKey]=hParts ? _familyPartsToIso(hParts) : (h || '');
+  obj[legacyKey]=obj[gKey] || '';
+
+  return obj;
+}
+
+function normalizePersonDates(obj){
+  if(!obj||typeof obj!=='object')return obj;
+  _familyNormalizeDateBundle(obj,'birth');
+  _familyNormalizeDateBundle(obj,'death');
+  return obj;
+}
+
+function _familyDateDisplayPair(obj, base){
+  if(!obj||typeof obj!=='object')return '';
+  base=base||'birth';
+  var g=base==='birth' ? (obj.birthGregorian||obj.dob||'') : (obj.deathGregorian||obj.dod||'');
+  var h=base==='birth' ? (obj.birthHijri||_familyIsoToHijriIso(g)||'') : (obj.deathHijri||_familyIsoToHijriIso(g)||'');
+  var parts=[];
+  if(g)parts.push(_familyFormatGregorianIso(g));
+  if(h)parts.push('('+ _familyFormatHijriIso(h) +')');
+  return parts.join('\n');
+}
+
+function _familyDateDisplayHtml(obj, base){
+  var txt=_familyDateDisplayPair(obj, base);
+  if(!txt)return '';
+  var parts=txt.split('\n');
+  if(parts.length===1)return parts[0];
+  return parts[0]+'<br><span style="font-size:12px;color:var(--text2)">'+parts[1]+'</span>';
+}
+
+function _familyDateInlineYear(obj){
+  if(!obj||typeof obj!=='object')return '';
+  return _familyFormatGregorianYear(obj.birthGregorian||obj.dob||'');
+}
+
+function _familyDateEditorHtml(prefix, obj, base, compact){
+  obj=obj||{};
+  base=base||'birth';
+  compact=!!compact;
+  var type=(obj[base+'DateType']||'').toString().toLowerCase();
+  if(type!=='gregorian' && type!=='hijri'){
+    var gv=base==='birth' ? (obj.birthGregorian||obj.dob||'') : (obj.deathGregorian||obj.dod||'');
+    var hv=base==='birth' ? (obj.birthHijri||'') : (obj.deathHijri||'');
+    type=hv && !gv ? 'hijri' : 'gregorian';
+  }
+  var gVal=base==='birth' ? (obj.birthGregorian||obj.dob||'') : (obj.deathGregorian||obj.dod||'');
+  var hVal=base==='birth' ? (obj.birthHijri||'') : (obj.deathHijri||'');
+  var gInputVal=gVal||'';
+  var hInputVal=_familyFormatHijriInput(hVal||'');
+  var preview=_familyDateDisplayPair(obj, base);
+  var gStyle=type==='hijri' ? 'display:none' : '';
+  var hStyle=type==='gregorian' ? 'display:none' : '';
+  var wrapStyle=compact ? 'style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"' : 'style="display:flex;flex-direction:column;gap:6px"';
+  return `
+    <div class="family-date-editor" data-prefix="${prefix}" data-base="${base}">
+      <div ${wrapStyle}>
+        <select id="${prefix}_type" onchange="_familyDateEditorUpdate('${prefix}')" style="min-width:88px">
+          <option value="gregorian" ${type==='gregorian'?'selected':''}>ميلادي</option>
+          <option value="hijri" ${type==='hijri'?'selected':''}>هجري</option>
+        </select>
+        <input id="${prefix}_gregorian" type="date" value="${gInputVal}" oninput="_familyDateEditorUpdate('${prefix}')" style="${gStyle} ${compact?'max-width:150px;':''}">
+        <input id="${prefix}_hijri" type="text" inputmode="numeric" placeholder="DD-MM-YYYY" value="${hInputVal}" oninput="_familyDateEditorUpdate('${prefix}')" style="${hStyle} ${compact?'max-width:150px;':''}">
+      </div>
+      <div id="${prefix}_preview" class="date-preview" style="font-size:12px;color:var(--text2);line-height:1.5">${preview ? _familyDateDisplayHtml(obj, base) : '—'}</div>
+    </div>`;
+}
+
+function _familyDateEditorBind(prefix, obj, base){
+  if(!window._familyDateEditors)window._familyDateEditors={};
+  window._familyDateEditors[prefix]={obj:obj||null, base:base||'birth'};
+}
+
+function _familyDateEditorUpdate(prefix){
+  var map=window._familyDateEditors||{};
+  var cfg=map[prefix];
+  if(!cfg)return;
+  var obj=cfg.obj||null;
+  var base=cfg.base||'birth';
+  var typeEl=document.getElementById(prefix+'_type');
+  var gEl=document.getElementById(prefix+'_gregorian');
+  var hEl=document.getElementById(prefix+'_hijri');
+  var previewEl=document.getElementById(prefix+'_preview');
+  if(!typeEl||!gEl||!hEl)return;
+
+  var type=typeEl.value==='hijri'?'hijri':'gregorian';
+  var gIso='', hIso='';
+
+  if(type==='gregorian'){
+    gIso=gEl.value||'';
+    hIso=gIso ? _familyIsoToHijriIso(gIso) : '';
+  }else{
+    var hParts=_familyParseHijriInput(hEl.value||'');
+    hIso=hParts ? _familyPartsToIso(hParts) : '';
+    gIso=hIso ? _familyHijriIsoToGregorianIso(hIso) : '';
+  }
+
+  gEl.style.display=type==='gregorian'?'':'none';
+  hEl.style.display=type==='hijri'?'':'none';
+
+  if(obj){
+    _familyNormalizeDateBundle(obj, base);
+    obj[base+'DateType']=type;
+    obj[base+'Gregorian']=gIso||'';
+    obj[base+'Hijri']=hIso||'';
+    if(base==='birth') obj.dob=gIso||'';
+    if(base==='death') obj.dod=gIso||'';
+  }
+
+  if(previewEl){
+    var previewObj={
+      birthDateType:type,
+      birthGregorian:base==='birth'?gIso:(obj&&obj.birthGregorian)||'',
+      birthHijri:base==='birth'?hIso:(obj&&obj.birthHijri)||'',
+      deathDateType:type,
+      deathGregorian:base==='death'?gIso:(obj&&obj.deathGregorian)||'',
+      deathHijri:base==='death'?hIso:(obj&&obj.deathHijri)||'',
+      dob:base==='birth'?gIso:(obj&&obj.dob)||'',
+      dod:base==='death'?gIso:(obj&&obj.dod)||''
+    };
+    previewEl.innerHTML=_familyDateDisplayHtml(previewObj, base);
+  }
+}
+
 // ══════════════════════════════════════════════════════════
 //  فهارس البيانات — تُعاد بناؤها عند أي تغيير في people/relPairs
 //  هدفها: تحويل عمليات O(n) المتكررة إلى O(1)
@@ -1441,11 +1736,12 @@ function addPerson(d){
     externalFatherName:d.externalFatherName||'', // kept for backward compat
     sortOrder:d.sortOrder!=null?d.sortOrder:9999,
     childrenFamilyName:d.childrenFamilyName||'',
-    spouses:d.spouses||[],
+    spouses:Array.isArray(d.spouses)?d.spouses.map(function(sp){return normalizePersonDates(Object.assign({},sp));}):[],
     photo:d.photo||null,
     notes:d.notes||'',
     isExternal:d.isExternal||false
   };
+  normalizePersonDates(p);
   people.push(p);expanded[p.id]=false;
   // تحديث الفهارس مباشرةً دون إعادة بناء كامل
   _personMap.set(p.id,p);
@@ -3688,8 +3984,10 @@ function renderNode(p,q,matchIds,contextIds){
     }
   }
   let meta='';
-  if(p.dob)meta+=`<span class="node-meta">م.${p.dob.split('-')[0]}</span> `;
-  if(p.dod)meta+=`<span class="node-meta">و.${p.dod.split('-')[0]}</span>`;
+  let birthYear=_familyDateInlineYear(p);
+  if(birthYear)meta+=`<span class="node-meta">${birthYear}</span> `;
+  let deathYear=_familyFormatGregorianYear(p.deathGregorian||p.dod||'');
+  if(deathYear)meta+=`<span class="node-meta">${deathYear}</span>`;
 
   // ── وضع الجوال: تبسيط الواجهة ──
   let isMob=document.body.classList.contains('mobile-mode');
@@ -4239,8 +4537,8 @@ function showPersonDetail(id){
     ${p.title?row('اللقب الشرفي',`<span style="font-weight:600;color:#5b21b6;background:#ede9fe;padding:2px 10px;border-radius:8px;border:1px solid #c4b5fd">${p.title}</span>`):''}
     ${row('الجنس',p.gender==='male'?'ذكر':'أنثى')}
     ${p.familyName?row('اللقب / العائلة',`<span style="font-weight:600;color:var(--text)">${p.familyName}</span>`):''}
-    ${p.dob?row('تاريخ الولادة',p.dob):''}
-    ${p.deceased&&p.dod?row('تاريخ الوفاة',p.dod):''}
+    ${p.birthGregorian||p.birthHijri||p.dob?row('تاريخ الولادة',_familyDateDisplayHtml(p,'birth')):''}
+    ${p.deceased&&(p.deathGregorian||p.deathHijri||p.dod)?row('تاريخ الوفاة',_familyDateDisplayHtml(p,'death')):''}
     ${p.deceased?row('الحالة',`<span style="color:#2e7d32;display:flex;align-items:center;gap:4px;">${p.gender==='female'?'متوفية — رحمها الله':'متوفى — رحمه الله'} ${crescent('#2e7d32')}</span>`):''}
     ${(()=>{
       // Children under a female parent: show her as mother, father from fatherId or fatherName
@@ -4612,7 +4910,7 @@ function showEditModal(editId,parentId){
   } else {
     window._inheritedFamilyName='';
   }
-  editingSpouses=p?JSON.parse(JSON.stringify(p.spouses)):[];
+  editingSpouses=p?JSON.parse(JSON.stringify(p.spouses)).map(function(sp){return normalizePersonDates(sp);}):[];
   // ── للشخص الخارجي الذكر: أضف زوجاته من الشجرة الرئيسية تلقائياً ──
   // البنت (من العائلة) مرتبطة بالأب الخارجي عبر sp.personId في قائمة أزواجها
   if(editId && p && p.isExternal && p.gender==='male'){
@@ -4622,12 +4920,12 @@ function showEditModal(editId,parentId){
           if(sp.personId===editId){
             var alreadyIn=editingSpouses.find(function(s){return s.personId===person.id||normalizeAr(s.name||'')===normalizeAr(person.name);});
             if(!alreadyIn){
-              editingSpouses.push({
+              editingSpouses.push(normalizePersonDates({
                 name:person.name, familyName:person.familyName||'',
                 gender:person.gender, deceased:person.deceased||false,
                 divorced:sp.divorced||false, dob:person.dob||'',
                 personId:person.id, isExternal:false
-              });
+              }));
             }
           }
         });
@@ -4714,9 +5012,15 @@ function showEditModal(editId,parentId){
       <input type="hidden" id="f_parent" value="${parentId||(p&&p.parentId?p.parentId:'')}">
     </div>
     ${motherFieldHtml}
-    <div class="form-row"><label>تاريخ الولادة</label><input type="date" id="f_dob" value="${p?p.dob:''}"></div>
+    <div class="form-row">
+      <label>تاريخ الولادة</label>
+      ${_familyDateEditorHtml('f_birth', p||{}, 'birth', false)}
+    </div>
     <div class="form-row"><div class="checkbox-row"><input type="checkbox" id="f_deceased" ${(p&&p.deceased)?'checked':''} onchange="toggleDod()"><label for="f_deceased">متوفى</label><span style="display:inline-flex">${crescent('#2e7d32')}</span></div></div>
-    <div class="form-row" id="dodRow" style="display:${(p&&p.deceased)?'block':'none'}"><label>تاريخ الوفاة</label><input type="date" id="f_dod" value="${p?p.dod:''}"></div>
+    <div class="form-row" id="dodRow" style="display:${(p&&p.deceased)?'block':'none'}">
+      <label>تاريخ الوفاة</label>
+      ${_familyDateEditorHtml('f_death', p||{}, 'death', false)}
+    </div>
     <div class="form-row"><label>صورة</label><div class="file-input-btn btn" style="width:100%;justify-content:center;">📷 رفع صورة<input type="file" accept="image/*" onchange="handlePhoto(event)"></div><div id="photoPreview" style="margin-top:6px;"></div></div>
     <div class="form-row"><label>ملاحظات</label><textarea id="f_notes" rows="2" style="resize:vertical">${p?p.notes:''}</textarea></div>
     <div class="section-title">الأزواج / الزوجات
@@ -4747,6 +5051,10 @@ function showEditModal(editId,parentId){
     }
   })();
   renderSpouseRows();renderChildRows();
+  _familyDateEditorBind('f_birth', p||{}, 'birth');
+  _familyDateEditorBind('f_death', p||{}, 'death');
+  _familyDateEditorUpdate('f_birth');
+  _familyDateEditorUpdate('f_death');
   // ── تهيئة قسم الأبناء بناءً على الجنس ──
   _initChildrenSection(p?p.gender:'male', editId, parentId);
   if(p&&p.photo){let _kb=Math.round(p.photo.length*0.75/1024);let _pn=p.name.replace(/'/g,"\\'");document.getElementById('photoPreview').innerHTML=`<div style='display:flex;align-items:center;gap:8px'><img src="${p.photo}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;cursor:pointer;border:2px solid var(--card-border)" onclick="zoomPhoto('${p.photo}','${_pn}')"><div><div style="font-size:11px;color:var(--text2)">${_kb}KB</div><button class='btn' style='font-size:11px;padding:3px 8px;color:#ef4444;margin-top:3px' onclick='clearPhoto()'>🗑 حذف</button></div></div>`;}
@@ -4788,6 +5096,10 @@ function renderRelativeRows(){
     let rp=getPerson(rid);
     return `<div class="sub-item"><span style="flex:1;font-size:12px;color:var(--text)">${rp?rp.name:'؟'} · ${getAncestorLabel(rid)}</span><button class="remove-btn" onclick="removeRelativeRow(${i})">✕</button></div>`;
   }).join('');
+  editingSpouses.forEach(function(sp,i){
+    _familyDateEditorBind('sp_birth_' + i, sp, 'birth');
+    _familyDateEditorUpdate('sp_birth_' + i);
+  });
 }
 function zoomPhoto(src,name){
   let ov=document.createElement('div');
@@ -4924,12 +5236,12 @@ function toggleDod(){document.getElementById('dodRow').style.display=document.ge
 function addSpouseRow(){
   // Default: external spouse for females, ask for males too
   let isCurrentlyFemale=(window._editGender==='female');
-  editingSpouses.push({
+  editingSpouses.push(normalizePersonDates({
     name:'',familyName:'',
     gender:isCurrentlyFemale?'male':'female',
     deceased:false,divorced:false,dob:'',
     relativeId:null,personId:null,isExternal:true
-  });
+  }));
   renderSpouseRows();renderChildRows();
 }
 function removeSpouseRow(i){editingSpouses.splice(i,1);renderSpouseRows();renderChildRows();}
@@ -4947,7 +5259,7 @@ function renderSpouseRows(){
       <input placeholder="الاسم" value="${s.name||''}" oninput="editingSpouses[${i}].name=this.value;renderChildRows()" style="flex:1;min-width:90px;font-weight:500;">
       <input placeholder="اللقب / العائلة" value="${s.familyName||''}" oninput="editingSpouses[${i}].familyName=this.value" style="width:96px;">
       <select onchange="editingSpouses[${i}].gender=this.value;renderSpouseRows()"><option value="female" ${s.gender==='female'?'selected':''}>أنثى ♀</option><option value="male" ${s.gender==='male'?'selected':''}>ذكر ♂</option></select>
-      <input type="date" value="${s.dob||''}" oninput="editingSpouses[${i}].dob=this.value" style="max-width:130px;font-size:11px" title="تاريخ الميلاد">
+      ${_familyDateEditorHtml('sp_birth_' + i, s, 'birth', true)}
       <label style="font-size:11px;white-space:nowrap;display:flex;align-items:center;gap:3px;" title="مطلق/ة"><input type="checkbox" ${s.divorced?'checked':''} onchange="editingSpouses[${i}].divorced=this.checked"> م</label>
       <label style="font-size:11px;display:flex;align-items:center;gap:3px;" title="متوفى"><input type="checkbox" ${s.deceased?'checked':''} onchange="editingSpouses[${i}].deceased=this.checked"><span style="display:inline-flex">${crescent('#2e7d32')}</span></label>
       <button class="remove-btn" onclick="removeSpouseRow(${i})" title="حذف">✕</button>
@@ -5058,7 +5370,14 @@ function ensureExternalSpousePerson(sp){
       if(sp.gender) existing.gender = sp.gender;
       if(sp.deceased!=null) existing.deceased = !!sp.deceased;
       if(sp.dob) existing.dob = sp.dob;
-      return sp;
+      if(sp.birthGregorian) existing.birthGregorian = sp.birthGregorian;
+      if(sp.birthHijri) existing.birthHijri = sp.birthHijri;
+      if(sp.birthDateType) existing.birthDateType = sp.birthDateType;
+      if(sp.dod) existing.dod = sp.dod;
+      if(sp.deathGregorian) existing.deathGregorian = sp.deathGregorian;
+      if(sp.deathHijri) existing.deathHijri = sp.deathHijri;
+      if(sp.deathDateType) existing.deathDateType = sp.deathDateType;
+      return normalizePersonDates(sp);
     }
   }
   let nm=(sp.name||'').trim();
@@ -5069,6 +5388,12 @@ function ensureExternalSpousePerson(sp){
     name:nm,
     familyName:sp.familyName||'',
     gender:sp.gender||'male',
+    birthDateType:sp.birthDateType||'gregorian',
+    birthGregorian:sp.birthGregorian||sp.dob||'',
+    birthHijri:sp.birthHijri||'',
+    deathDateType:sp.deathDateType||'gregorian',
+    deathGregorian:sp.deathGregorian||sp.dod||'',
+    deathHijri:sp.deathHijri||'',
     dob:sp.dob||'',
     dod:sp.dod||'',
     deceased:!!sp.deceased,
@@ -5401,10 +5726,38 @@ function saveModal(editId,parentId){
   let gender=document.getElementById('f_gender').value;
   let parentEl=document.getElementById('f_parent');
   let pid=parentEl?(parentEl.value||''):'';
-  let dob=document.getElementById('f_dob').value;
   let deceased=document.getElementById('f_deceased').checked;
-  let dod=document.getElementById('f_dod')?document.getElementById('f_dod').value:'';
   let notes=document.getElementById('f_notes').value.trim();
+
+  let birthTypeEl=document.getElementById('f_birth_type');
+  let birthGregEl=document.getElementById('f_birth_gregorian');
+  let birthHijriEl=document.getElementById('f_birth_hijri');
+  let deathTypeEl=document.getElementById('f_death_type');
+  let deathGregEl=document.getElementById('f_death_gregorian');
+  let deathHijriEl=document.getElementById('f_death_hijri');
+
+  let birthType=birthTypeEl?(birthTypeEl.value==='hijri'?'hijri':'gregorian'):'gregorian';
+  let birthGregorian=birthGregEl?(birthGregEl.value||''):'';
+  let birthHijriRaw=birthHijriEl?(birthHijriEl.value||''):'';
+  let birthHijriParts=_familyParseHijriInput(birthHijriRaw);
+  let birthHijri=birthHijriParts?_familyPartsToIso(birthHijriParts):'';
+  if(birthType==='gregorian'){
+    birthGregorian=birthGregorian||'';
+    if(birthGregorian)birthHijri=_familyIsoToHijriIso(birthGregorian);
+  }else{
+    if(birthHijri)birthGregorian=_familyHijriIsoToGregorianIso(birthHijri);
+  }
+
+  let deathType=deathTypeEl?(deathTypeEl.value==='hijri'?'hijri':'gregorian'):'gregorian';
+  let deathGregorian=deathGregEl?(deathGregEl.value||''):'';
+  let deathHijriRaw=deathHijriEl?(deathHijriEl.value||''):'';
+  let deathHijriParts=_familyParseHijriInput(deathHijriRaw);
+  let deathHijri=deathHijriParts?_familyPartsToIso(deathHijriParts):'';
+  if(deathType==='gregorian'){
+    if(deathGregorian)deathHijri=_familyIsoToHijriIso(deathGregorian);
+  }else{
+    if(deathHijri)deathGregorian=_familyHijriIsoToGregorianIso(deathHijri);
+  }
   let motherIdEl=document.getElementById('f_mother_id');
   let motherTextEl=document.getElementById('f_mother');
   let motherId=motherIdEl&&motherIdEl.value?parseInt(motherIdEl.value):null;
@@ -5474,7 +5827,7 @@ function saveModal(editId,parentId){
 
   if(editId){
     let p=getPerson(editId);
-    Object.assign(p,{name,familyName,title,gender,dob,deceased,dod,notes,motherId,motherName,spouses:normalizedSpouses});
+    Object.assign(p,{name,familyName,title,gender,deathDateType:deathType,birthDateType:birthType,birthGregorian,birthHijri,deathGregorian,dod:deathGregorian,deathHijri,dob:birthGregorian,deceased,notes,motherId,motherName,spouses:normalizedSpouses}); normalizePersonDates(p);
     if(pid!==undefined)p.parentId=pid?parseInt(pid):null;
     if(tempPhoto==='__deleted__')p.photo=null;
     else if(tempPhoto!==null)p.photo=tempPhoto;
@@ -5501,7 +5854,7 @@ function saveModal(editId,parentId){
     let actualParent=parentId||null;
     if(pid)actualParent=parseInt(pid);
     if(parentId&&!pid)actualParent=parentId;
-    let np=addPerson({name,familyName,title,gender,dob,deceased,dod,notes,motherId,motherName,
+    let np=addPerson({name,familyName,title,gender,birthDateType:birthType,birthGregorian,birthHijri,deathDateType:deathType,deathGregorian,dod:deathGregorian,deathHijri,dob:birthGregorian,deceased,notes,motherId,motherName,
       parentId:actualParent||null,
       sortOrder:window._insertAtPos!=null?-1:9999,
       spouses:normalizedSpouses,photo:tempPhoto});
@@ -6716,13 +7069,14 @@ function _familyNormalizeUpdateData(payload){
   }
   // دعم أي صيغة قديمة/بديلة
   if(Array.isArray(obj.people)){
-    obj.people=obj.people.filter(Boolean).map(p=>({...(p||{})}));
+    obj.people=obj.people.filter(Boolean).map(p=>normalizePersonDates({...(p||{})}));
+    obj.people.forEach(function(p){if(Array.isArray(p.spouses))p.spouses=p.spouses.filter(Boolean).map(function(sp){return normalizePersonDates({...(sp||{})});});});
     if(!Array.isArray(obj.relPairs)) obj.relPairs=Array.isArray(obj.relationships)?obj.relationships:[];
     if(obj.nextId==null) obj.nextId=(obj.people.reduce((m,p)=>Math.max(m,Number(p&&p.id)||0),0)||0)+1;
     return obj;
   }
   if(Array.isArray(obj.data)){
-    return {people:obj.data, relPairs:Array.isArray(obj.relPairs)?obj.relPairs:[], nextId:obj.nextId||1, myPersonId:obj.myPersonId||null, uploadedAt:obj.uploadedAt||''};
+    return {people:obj.data.map(function(p){return normalizePersonDates({...(p||{})});}), relPairs:Array.isArray(obj.relPairs)?obj.relPairs:[], nextId:obj.nextId||1, myPersonId:obj.myPersonId||null, uploadedAt:obj.uploadedAt||''};
   }
   return null;
 }
@@ -8703,7 +9057,8 @@ deletePerson=function(id){
     var idbData=await _idbLoad();
     if(idbData&&idbData.people&&idbData.people.length){
       people=idbData.people;nextId=idbData.nextId||1;relPairs=idbData.relPairs||[];
-      people.forEach(function(p){expanded[p.id]=false;});
+      people=people.map(function(p){return normalizePersonDates(p);});
+      people.forEach(function(p){if(Array.isArray(p.spouses))p.spouses=p.spouses.map(function(sp){return normalizePersonDates(sp);});expanded[p.id]=false;});
       migrateExternalSpouses();
       _markDeviceInit();
       // ── استعادة الصور من مخزنها المنفصل ──
@@ -8719,7 +9074,8 @@ deletePerson=function(id){
       var lsData=_lsLoad();
       if(lsData&&lsData.people&&lsData.people.length){
         people=lsData.people;nextId=lsData.nextId||1;relPairs=lsData.relPairs||[];
-        people.forEach(function(p){expanded[p.id]=false;});
+        people=people.map(function(p){return normalizePersonDates(p);});
+        people.forEach(function(p){if(Array.isArray(p.spouses))p.spouses=p.spouses.map(function(sp){return normalizePersonDates(sp);});expanded[p.id]=false;});
         migrateExternalSpouses();
         _markDeviceInit();
         // ترحيل البيانات من localStorage إلى IDB
@@ -8745,7 +9101,8 @@ deletePerson=function(id){
           if(d.people&&d.people.length){
             people=d.people;nextId=d.nextId||1;relPairs=d.relPairs||[];
             if(d.myPersonId){myPersonId=parseInt(d.myPersonId);saveMyPerson();}
-            people.forEach(function(p){expanded[p.id]=false;});
+            people=people.map(function(p){return normalizePersonDates(p);});
+            people.forEach(function(p){if(Array.isArray(p.spouses))p.spouses=p.spouses.map(function(sp){return normalizePersonDates(sp);});expanded[p.id]=false;});
             migrateExternalSpouses();
             // حفظ في IDB وlocalStorage حتى تصبح هي المصدر في الزيارات التالية
             _idbSave({people:people,relPairs:relPairs,nextId:nextId}).catch(function(){});
