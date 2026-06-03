@@ -1369,14 +1369,22 @@ function _familyParseIsoDate(v){
   return {year:parseInt(m[1],10),month:parseInt(m[2],10),day:parseInt(m[3],10)};
 }
 
+function _familyNormalizeDigits(v){
+  return String(v===undefined||v===null ? '' : v)
+    .replace(/[٠-٩]/g,function(ch){ return '0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(ch)]; })
+    .replace(/[۰-۹]/g,function(ch){ return '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)]; })
+    .replace(/[‐‑‒–—−\/\.]/g,'-')
+    .trim();
+}
+
 function _familyParseHijriInput(v){
-  v=_familyCloneDateValue(v);
+  v=_familyNormalizeDigits(_familyCloneDateValue(v));
   if(!v)return null;
-  var m=v.match(/^(\d{1,2})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{4})$/);
+  var m=v.match(/^(\d{1,2})\s*-\s*(\d{1,2})\s*-\s*(\d{3,4})$/);
   if(m){
     return {day:parseInt(m[1],10),month:parseInt(m[2],10),year:parseInt(m[3],10)};
   }
-  m=v.match(/^(\d{4})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{1,2})$/);
+  m=v.match(/^(\d{3,4})\s*-\s*(\d{1,2})\s*-\s*(\d{1,2})$/);
   if(m){
     return {year:parseInt(m[1],10),month:parseInt(m[2],10),day:parseInt(m[3],10)};
   }
@@ -1396,31 +1404,34 @@ function _familyGregorianToJdn(year, month, day){
   }
   var A=Math.floor(year/100);
   var B=2-A+Math.floor(A/4);
-  return Math.floor(365.25*(year+4716))
-    + Math.floor(30.6001*(month+1))
-    + day + B - 1524;
+  return Math.floor(365.25*(year+4716)) + Math.floor(30.6001*(month+1)) + day + B - 1524;
 }
 
-function _familyJdnToGregorian(JD){
+function _familyJdnToGregorianParts(JD){
   JD=parseInt(JD,10);
-  var a=JD+32044;
-  var b=Math.floor((4*a+3)/146097);
-  var c=a-Math.floor(146097*b/4);
-  var d=Math.floor((4*c+3)/1461);
-  var e=c-Math.floor(1461*d/4);
-  var m=Math.floor((5*e+2)/153);
-  var day=e-Math.floor((153*m+2)/5)+1;
-  var month=m+3-12*Math.floor(m/10);
-  var year=100*b+d-4800+Math.floor(m/10);
+  var l=JD+68569;
+  var n=Math.floor((4*l)/146097);
+  l=l-Math.floor((146097*n+3)/4);
+  var i=Math.floor((4000*(l+1))/1461001);
+  l=l-Math.floor((1461*i)/4)+31;
+  var j=Math.floor((80*l)/2447);
+  var day=l-Math.floor((2447*j)/80);
+  l=Math.floor(j/11);
+  var month=j+2-12*l;
+  var year=100*(n-49)+i+l;
   return {year:year,month:month,day:day};
 }
 
-function _familyGregorianToHijri(year, month, day){
+function _familyJdnToGregorian(JD){
+  return _familyJdnToGregorianParts(JD);
+}
+
+function _familyGregorianToHijriParts(year, month, day){
   var JD=_familyGregorianToJdn(year, month, day);
-  var l=JD-1948440+10632;
+  var l=JD-1948439+10632;
   var n=Math.floor((l-1)/10631);
   l=l-10631*n+354;
-  var j=Math.floor((10985-l)/5316)*Math.floor((50*l)/17719)-Math.floor(l/5670)*Math.floor((43*l)/15238);
+  var j=Math.floor((10985-l)/5316)*Math.floor((50*l)/17719)+Math.floor(l/5670)*Math.floor((43*l)/15238);
   l=l-Math.floor((30-j)/15)*Math.floor((17719*j)/50)-Math.floor(j/16)*Math.floor((15238*j)/43)+29;
   var month2=Math.floor((24*l)/709);
   var day2=l-Math.floor((709*month2)/24);
@@ -1428,13 +1439,13 @@ function _familyGregorianToHijri(year, month, day){
   return {year:year2,month:month2,day:day2};
 }
 
+function _familyGregorianToHijri(year, month, day){
+  return _familyGregorianToHijriParts(year, month, day);
+}
+
 function _familyHijriToJdn(year, month, day){
   year=parseInt(year,10); month=parseInt(month,10); day=parseInt(day,10);
-  return day
-    + Math.floor((29.5*(month-1)))
-    + (year-1)*354
-    + Math.floor((3+11*year)/30)
-    + 1948440;
+  return day + Math.floor(29.5*(month-1)) + (year-1)*354 + Math.floor((3+11*year)/30) + 1948440;
 }
 
 function _familyJdnToHijri(JD){
@@ -1453,26 +1464,39 @@ function _familyJdnToHijri(JD){
 function _familyIsoToHijriIso(iso){
   var g=_familyParseIsoDate(iso);
   if(!g)return '';
-  var h=_familyGregorianToHijri(g.year,g.month,g.day);
+  var h=_familyGregorianToHijriParts(g.year,g.month,g.day);
   return _familyPartsToIso(h);
 }
 
 function _familyHijriIsoToGregorianIso(iso){
-  var h=_familyParseIsoDate(iso);
+  var h=_familyParseHijriInput(iso) || _familyParseIsoDate(iso);
   if(!h)return '';
-  var jd=_familyHijriToJdn(h.year,h.month,h.day);
-  return _familyPartsToIso(_familyJdnToGregorian(jd));
+  var loJd=_familyGregorianToJdn(1700,1,1);
+  var hiJd=_familyGregorianToJdn(2400,12,31);
+  var found=null;
+  while(loJd<=hiJd){
+    var midJd=Math.floor((loJd+hiJd)/2);
+    var parts=_familyGregorianToHijriParts.apply(null, [_familyJdnToGregorianParts(midJd).year,_familyJdnToGregorianParts(midJd).month,_familyJdnToGregorianParts(midJd).day]);
+    var cmp=(parts.year-h.year) || (parts.month-h.month) || (parts.day-h.day);
+    if(cmp<0) loJd=midJd+1;
+    else { found=midJd; hiJd=midJd-1; }
+  }
+  if(found===null)return '';
+  var p=_familyJdnToGregorianParts(found);
+  var chk=_familyGregorianToHijriParts(p.year,p.month,p.day);
+  if((chk.year-h.year) || (chk.month-h.month) || (chk.day-h.day)) return '';
+  return _familyPartsToIso(p);
 }
 
 function _familyFormatGregorianIso(iso){
   var g=_familyParseIsoDate(iso);
-  if(!g)return '';
+  if(!g)return String(iso||'').trim();
   return _familyPad2(g.day)+'-'+_familyPad2(g.month)+'-'+g.year;
 }
 
 function _familyFormatHijriIso(iso){
   var h=_familyParseIsoDate(iso);
-  if(!h)return '';
+  if(!h)return String(iso||'').trim();
   return _familyPad2(h.day)+' '+(_FAMILY_HIJRI_MONTHS[h.month-1]||h.month)+' '+h.year+'هـ';
 }
 
@@ -1500,8 +1524,14 @@ function _familyNormalizeDateBundle(obj, base){
   var h=_familyCloneDateValue(obj[hKey]||'');
   var type=_familyCloneDateValue(obj[typeKey]||'').toLowerCase();
 
-  if(g && !/^\d{4}-\d{2}-\d{2}$/.test(g)) g=_familyPartsToIso(_familyParseIsoDate(g) || {});
-  if(h && !/^\d{4}-\d{2}-\d{2}$/.test(h)) h=_familyPartsToIso(_familyParseHijriInput(h) || _familyParseIsoDate(h) || {});
+  if(g && !/^\d{4}-\d{2}-\d{2}$/.test(g)){
+    var gp=_familyParseIsoDate(g);
+    g=gp ? _familyPartsToIso(gp) : g;
+  }
+  if(h && !/^\d{4}-\d{2}-\d{2}$/.test(h)){
+    var hp=_familyParseHijriInput(h) || _familyParseIsoDate(h);
+    h=hp ? _familyPartsToIso(hp) : h;
+  }
 
   var gParts=_familyParseIsoDate(g);
   var hParts=_familyParseIsoDate(h);
@@ -1523,7 +1553,6 @@ function _familyNormalizeDateBundle(obj, base){
   obj[gKey]=gParts ? _familyPartsToIso(gParts) : (g || '');
   obj[hKey]=hParts ? _familyPartsToIso(hParts) : (h || '');
   obj[legacyKey]=obj[gKey] || '';
-
   return obj;
 }
 
@@ -1546,13 +1575,15 @@ function _familyDateDisplayPair(obj, base){
   var parts=[];
   if(g)parts.push(_familyFormatGregorianIso(g));
   if(h)parts.push('('+ _familyFormatHijriIso(h) +')');
-  return parts.join('\n');
+  return parts.join('
+');
 }
 
 function _familyDateDisplayHtml(obj, base){
   var txt=_familyDateDisplayPair(obj, base);
   if(!txt)return '';
-  var parts=txt.split('\n');
+  var parts=txt.split('
+');
   if(parts.length===1)return parts[0];
   return parts[0]+'<br><span style="font-size:12px;color:var(--text2)">'+parts[1]+'</span>';
 }
@@ -1619,10 +1650,12 @@ function _familyDateEditorUpdate(prefix){
   if(type==='gregorian'){
     gIso=gEl.value||'';
     hIso=gIso ? _familyIsoToHijriIso(gIso) : '';
+    if(hIso) hEl.value=_familyFormatHijriInput(hIso);
   }else{
     var hParts=_familyParseHijriInput(hEl.value||'');
     hIso=hParts ? _familyPartsToIso(hParts) : '';
     gIso=hIso ? _familyHijriIsoToGregorianIso(hIso) : '';
+    if(gIso) gEl.value=gIso;
   }
 
   gEl.style.display=type==='gregorian'?'':'none';
@@ -1651,7 +1684,6 @@ function _familyDateEditorUpdate(prefix){
     previewEl.innerHTML=_familyDateDisplayHtml(previewObj, base);
   }
 }
-
 // ══════════════════════════════════════════════════════════
 //  فهارس البيانات — تُعاد بناؤها عند أي تغيير في people/relPairs
 //  هدفها: تحويل عمليات O(n) المتكررة إلى O(1)
