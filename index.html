@@ -1538,7 +1538,11 @@ function _familyDateDisplayPair(obj, base){
   if(!obj||typeof obj!=='object')return '';
   base=base||'birth';
   var g=base==='birth' ? (obj.birthGregorian||obj.dob||'') : (obj.deathGregorian||obj.dod||'');
-  var h=base==='birth' ? (obj.birthHijri||_familyIsoToHijriIso(g)||'') : (obj.deathHijri||_familyIsoToHijriIso(g)||'');
+  var h=base==='birth' ? (obj.birthHijri||'') : (obj.deathHijri||'');
+
+  if(!g && h) g=_familyHijriIsoToGregorianIso(h) || '';
+  if(!h && g) h=_familyIsoToHijriIso(g) || '';
+
   var parts=[];
   if(g)parts.push(_familyFormatGregorianIso(g));
   if(h)parts.push('('+ _familyFormatHijriIso(h) +')');
@@ -1555,7 +1559,9 @@ function _familyDateDisplayHtml(obj, base){
 
 function _familyDateInlineYear(obj){
   if(!obj||typeof obj!=='object')return '';
-  return _familyFormatGregorianYear(obj.birthGregorian||obj.dob||'');
+  var g=obj.birthGregorian||obj.dob||'';
+  if(!g && (obj.birthHijri||obj.dobHijri)) g=_familyHijriIsoToGregorianIso(obj.birthHijri||obj.dobHijri||'') || '';
+  return _familyFormatGregorianYear(g);
 }
 
 function _familyDateEditorHtml(prefix, obj, base, compact){
