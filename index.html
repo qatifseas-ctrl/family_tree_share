@@ -990,7 +990,222 @@ body.mobile-mode #fsaSaveBtn2 { display:none !important; }
     animation: voicePulse 0.7s ease-in-out infinite;
     color: #7c3aed !important;
   }
-  </style></head>
+  </style>
+
+<!-- ═══ Hijri-Gregorian Date Converter ═══ -->
+<script>
+/**
+ * Hijri-Gregorian Date Converter
+ * استخدام خوارزمية Tabular Islamic Calendar
+ * لا نعتمد على Intl.DateTimeFormat أو إعدادات الجهاز
+ */
+const HijriConverter = (function() {
+  'use strict';
+
+  // أسماء الأشهر الهجرية
+  const HIJRI_MONTHS = [
+    'محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر',
+    'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان',
+    'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'
+  ];
+
+  function gregorianToJDN(year, month, day) {
+    if (month <= 2) {
+      year = year - 1;
+      month = month + 12;
+    }
+    const A = Math.floor(year / 100);
+    const B = 2 - A + Math.floor(A / 4);
+    const JD = Math.floor(365.25 * (year + 4716))
+      + Math.floor(30.6001 * (month + 1))
+      + day
+      + B
+      - 1524;
+    return JD;
+  }
+
+  function jdnToGregorian(JD) {
+    const Z = Math.floor(JD + 0.5);
+    const A = Math.floor((Z - 1867216.25) / 36524.25);
+    const alpha = Math.floor(A / 100 * 3 - 2);
+    const B = Z + 1 + A - alpha;
+    const C = B + 1524;
+    const D = Math.floor((C - 122.1) / 365.25);
+    const E = Math.floor(365.25 * D);
+    const F = Math.floor((C - E) / 30.6001);
+    const day = C - E - Math.floor(30.6001 * F);
+    const month = F < 14 ? F - 1 : F - 13;
+    const year = month > 2 ? D - 4716 : D - 4715;
+    return { year, month, day };
+  }
+
+  function jdnToHijri(JD) {
+    let l = JD - 1948440 + 10632;
+    const n = Math.floor((l - 1) / 10631);
+    l = l - 10631 * n + 354;
+    let j = Math.floor((10985 - l) / 5316)
+      * Math.floor((50 * l) / 17719)
+      - Math.floor(l / 5670)
+      * Math.floor((43 * l) / 15238);
+    l = l
+      - Math.floor((30 - j) / 15)
+      * Math.floor((17719 * j) / 50)
+      + Math.floor(j / 16)
+      - Math.floor((15238 * j) / 43)
+      + 29;
+    const month = Math.floor((24 * l) / 709);
+    const day = l - Math.floor((709 * month) / 24);
+    const year = 30 * n + j - 30;
+    return { year, month, day };
+  }
+
+  function hijriToJDN(year, month, day) {
+    const jd = Math.floor((11 * year + 3) / 30)
+      + Math.floor(354 * year)
+      + Math.floor(30 * month)
+      - Math.floor((month - 1) / 11)
+      + day
+      + 1948440
+      - 385;
+    return jd;
+  }
+
+  function gregorianToHijri(year, month, day) {
+    const jdn = gregorianToJDN(year, month, day);
+    return jdnToHijri(jdn);
+  }
+
+  function hijriToGregorian(year, month, day) {
+    const jdn = hijriToJDN(year, month, day);
+    return jdnToGregorian(jdn);
+  }
+
+  function formatGregorian(year, month, day) {
+    const d = String(day).padStart(2, '0');
+    const m = String(month).padStart(2, '0');
+    return `${d}-${m}-${year}`;
+  }
+
+  function formatHijri(year, month, day) {
+    const monthName = HIJRI_MONTHS[month - 1] || `الشهر ${month}`;
+    return `${day} ${monthName} ${year}هـ`;
+  }
+
+  function parseGregorianDate(dateStr) {
+    if (!dateStr) return [null, null, null];
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return [null, null, null];
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+    if (isNaN(day) || isNaN(month) || isNaN(year)) return [null, null, null];
+    return [year, month, day];
+  }
+
+  function parseHijriDate(dateStr) {
+    if (!dateStr) return [null, null, null];
+    dateStr = dateStr.replace(/ه\s*$/, '').trim();
+    const yearMatch = dateStr.match(/(\d{4})\s*$/);
+    if (!yearMatch) return [null, null, null];
+    const year = parseInt(yearMatch[1], 10);
+    const remaining = dateStr.substring(0, dateStr.length - yearMatch[1].length).trim();
+    const dayMonthMatch = remaining.match(/^(\d+)\s+(.+)$/);
+    if (!dayMonthMatch) return [null, null, null];
+    const day = parseInt(dayMonthMatch[1], 10);
+    const monthName = dayMonthMatch[2].trim();
+    let month = null;
+    for (let i = 0; i < HIJRI_MONTHS.length; i++) {
+      if (HIJRI_MONTHS[i] === monthName) {
+        month = i + 1;
+        break;
+      }
+    }
+    if (month === null) return [null, null, null];
+    return [year, month, day];
+  }
+
+  function ensureBothDates(person) {
+    const result = Object.assign({}, person);
+    if (result.birthGregorian && !result.birthHijri) {
+      const [year, month, day] = parseGregorianDate(result.birthGregorian);
+      if (year && month && day) {
+        const hijri = gregorianToHijri(year, month, day);
+        result.birthHijri = formatHijri(hijri.year, hijri.month, hijri.day);
+      }
+    } else if (result.birthHijri && !result.birthGregorian) {
+      const [year, month, day] = parseHijriDate(result.birthHijri);
+      if (year && month && day) {
+        const greg = hijriToGregorian(year, month, day);
+        result.birthGregorian = formatGregorian(greg.year, greg.month, greg.day);
+      }
+    }
+    if (result.deathGregorian && !result.deathHijri) {
+      const [year, month, day] = parseGregorianDate(result.deathGregorian);
+      if (year && month && day) {
+        const hijri = gregorianToHijri(year, month, day);
+        result.deathHijri = formatHijri(hijri.year, hijri.month, hijri.day);
+      }
+    } else if (result.deathHijri && !result.deathGregorian) {
+      const [year, month, day] = parseHijriDate(result.deathHijri);
+      if (year && month && day) {
+        const greg = hijriToGregorian(year, month, day);
+        result.deathGregorian = formatGregorian(greg.year, greg.month, greg.day);
+      }
+    }
+    return result;
+  }
+
+  function getYearForTree(person) {
+    if (person.birthGregorian) {
+      const [year] = parseGregorianDate(person.birthGregorian);
+      return year;
+    } else if (person.birthHijri) {
+      const [hijriYear, hijriMonth, hijriDay] = parseHijriDate(person.birthHijri);
+      if (hijriYear && hijriMonth && hijriDay) {
+        const greg = hijriToGregorian(hijriYear, hijriMonth, hijriDay);
+        return greg.year;
+      }
+    }
+    return null;
+  }
+
+  function getFullDateDisplay(person) {
+    let birthDisplay = '';
+    let deathDisplay = '';
+    if (person.birthGregorian) {
+      birthDisplay = person.birthGregorian;
+      if (person.birthHijri) {
+        birthDisplay += '<br>' + person.birthHijri;
+      }
+    } else if (person.birthHijri) {
+      birthDisplay = person.birthHijri;
+    }
+    if (person.deathGregorian) {
+      deathDisplay = person.deathGregorian;
+      if (person.deathHijri) {
+        deathDisplay += '<br>' + person.deathHijri;
+      }
+    } else if (person.deathHijri) {
+      deathDisplay = person.deathHijri;
+    }
+    return { birth: birthDisplay, death: deathDisplay };
+  }
+
+  return {
+    gregorianToHijri,
+    hijriToGregorian,
+    formatGregorian,
+    formatHijri,
+    parseGregorianDate,
+    parseHijriDate,
+    ensureBothDates,
+    getFullDateDisplay,
+    getYearForTree,
+    HIJRI_MONTHS
+  };
+})();
+</script>
+</head>
 <body>
 <div id="app">
   <h1>🌳 شجرة العائلة</h1>
